@@ -19,7 +19,7 @@
         "redis",
         "semaphore"
     ],
-    "license": "Apache-2.0",
+    "license": "MIT",
     "main": "index.js",
     "name": "petty-cache",
     "repository": "https://github.com/stores-com/petty-cache",
