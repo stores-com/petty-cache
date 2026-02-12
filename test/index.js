@@ -96,7 +96,7 @@ describe('new PettyCache()', function() {
 
 describe('memory-cache', function() {
     it('memoryCache.put(key, \'\')', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         memoryCache.put(key, '', 1000);
         assert(memoryCache.keys().includes(key));
@@ -111,7 +111,7 @@ describe('memory-cache', function() {
     });
 
     it('memoryCache.put(key, 0)', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         memoryCache.put(key, 0, 1000);
         assert(memoryCache.keys().includes(key));
@@ -126,7 +126,7 @@ describe('memory-cache', function() {
     });
 
     it('memoryCache.put(key, false)', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         memoryCache.put(key, false, 1000);
         assert(memoryCache.keys().includes(key));
@@ -141,7 +141,7 @@ describe('memory-cache', function() {
     });
 
     it('memoryCache.put(key, NaN)', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         memoryCache.put(key, NaN, 1000);
         assert(memoryCache.keys().includes(key));
@@ -156,7 +156,7 @@ describe('memory-cache', function() {
     });
 
     it('memoryCache.put(key, null)', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         memoryCache.put(key, null, 1000);
         assert(memoryCache.keys().includes(key));
@@ -171,7 +171,7 @@ describe('memory-cache', function() {
     });
 
     it('memoryCache.put(key, undefined)', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         memoryCache.put(key, undefined, 1000);
         assert(memoryCache.keys().includes(key));
@@ -242,15 +242,15 @@ describe('PettyCache.bulkFetch', function() {
     it('PettyCache.bulkFetch should cache null values returned by func', function(done) {
         this.timeout(7000);
 
-        var key1 = Math.random().toString();
-        var key2 = Math.random().toString();
+        const key1 = Math.random().toString();
+        const key2 = Math.random().toString();
 
         pettyCache.bulkFetch([key1, key2], function(keys, callback) {
             assert.strictEqual(keys.length, 2);
             assert(keys.some(k => k === key1));
             assert(keys.some(k => k === key2));
 
-            var values = {};
+            const values = {};
 
             values[key1] = '1';
             values[key2] = null;
@@ -307,7 +307,7 @@ describe('PettyCache.bulkFetch', function() {
         this.timeout(7000);
 
         const keys = [Math.random().toString(), Math.random().toString()];
-        var numberOfFuncCalls = 0;
+        let numberOfFuncCalls = 0;
 
         const func = function(keys, callback) {
             numberOfFuncCalls++;
@@ -358,9 +358,9 @@ describe('PettyCache.bulkGet', function() {
     it('PettyCache.bulkGet should return values', function(done) {
         this.timeout(6000);
 
-        var key1 = Math.random().toString();
-        var key2 = Math.random().toString();
-        var key3 = Math.random().toString();
+        const key1 = Math.random().toString();
+        const key2 = Math.random().toString();
+        const key3 = Math.random().toString();
 
         pettyCache.set(key1, '1', function() {
             pettyCache.set(key2, '2', function() {
@@ -399,9 +399,9 @@ describe('PettyCache.bulkGet', function() {
     it('PettyCache.bulkGet should return null for missing keys', function(done) {
         this.timeout(6000);
 
-        var key1 = Math.random().toString();
-        var key2 = Math.random().toString();
-        var key3 = Math.random().toString();
+        const key1 = Math.random().toString();
+        const key2 = Math.random().toString();
+        const key3 = Math.random().toString();
 
         pettyCache.set(key1, '1', function() {
             pettyCache.set(key2, '2', function() {
@@ -438,13 +438,13 @@ describe('PettyCache.bulkGet', function() {
     it('PettyCache.bulkGet should correctly handle falsy values', function(done) {
         this.timeout(12000);
 
-        var key1 = Math.random().toString();
-        var key2 = Math.random().toString();
-        var key3 = Math.random().toString();
-        var key4 = Math.random().toString();
-        var key5 = Math.random().toString();
-        var key6 = Math.random().toString();
-        var values = {};
+        const key1 = Math.random().toString();
+        const key2 = Math.random().toString();
+        const key3 = Math.random().toString();
+        const key4 = Math.random().toString();
+        const key5 = Math.random().toString();
+        const key6 = Math.random().toString();
+        const values = {};
 
         values[key1] = '';
         values[key2] = 0;
@@ -458,10 +458,10 @@ describe('PettyCache.bulkGet', function() {
         }, function(err) {
             assert.ifError(err);
 
-            var keys = Object.keys(values);
+            const keys = Object.keys(values);
 
             // Add an additional key to check handling of missing keys
-            var key7 = Math.random().toString();
+            const key7 = Math.random().toString();
             keys.push(key7);
 
             pettyCache.bulkGet(keys, function(err, data) {
@@ -527,10 +527,10 @@ describe('PettyCache.bulkSet', function() {
     it('PettyCache.bulkSet should set values', function(done) {
         this.timeout(6000);
 
-        var key1 = Math.random().toString();
-        var key2 = Math.random().toString();
-        var key3 = Math.random().toString();
-        var values = {};
+        const key1 = Math.random().toString();
+        const key2 = Math.random().toString();
+        const key3 = Math.random().toString();
+        const values = {};
 
         values[key1] = '1';
         values[key2] = 2;
@@ -578,10 +578,10 @@ describe('PettyCache.bulkSet', function() {
     it('PettyCache.bulkSet should set values with the specified TTL option', function(done) {
         this.timeout(7000);
 
-        var key1 = Math.random().toString();
-        var key2 = Math.random().toString();
-        var key3 = Math.random().toString();
-        var values = {};
+        const key1 = Math.random().toString();
+        const key2 = Math.random().toString();
+        const key3 = Math.random().toString();
+        const values = {};
 
         values[key1] = '1';
         values[key2] = 2;
@@ -629,10 +629,10 @@ describe('PettyCache.bulkSet', function() {
     it('PettyCache.bulkSet should set values with the specified TTL option using max and min', function(done) {
         this.timeout(10000);
 
-        var key1 = Math.random().toString();
-        var key2 = Math.random().toString();
-        var key3 = Math.random().toString();
-        var values = {};
+        const key1 = Math.random().toString();
+        const key2 = Math.random().toString();
+        const key3 = Math.random().toString();
+        const values = {};
 
         values[key1] = '1';
         values[key2] = 2;
@@ -680,10 +680,10 @@ describe('PettyCache.bulkSet', function() {
     it('PettyCache.bulkSet should set values with the specified TTL option using max only', function(done) {
         this.timeout(10000);
 
-        var key1 = Math.random().toString();
-        var key2 = Math.random().toString();
-        var key3 = Math.random().toString();
-        var values = {};
+        const key1 = Math.random().toString();
+        const key2 = Math.random().toString();
+        const key3 = Math.random().toString();
+        const values = {};
 
         values[key1] = '1';
         values[key2] = 2;
@@ -704,10 +704,10 @@ describe('PettyCache.bulkSet', function() {
     it('PettyCache.bulkSet should set values with the specified TTL option using min only', function(done) {
         this.timeout(10000);
 
-        var key1 = Math.random().toString();
-        var key2 = Math.random().toString();
-        var key3 = Math.random().toString();
-        var values = {};
+        const key1 = Math.random().toString();
+        const key2 = Math.random().toString();
+        const key3 = Math.random().toString();
+        const values = {};
 
         values[key1] = '1';
         values[key2] = 2;
@@ -781,7 +781,7 @@ describe('PettyCache.fetch', function() {
     it('PettyCache.fetch', function(done) {
         this.timeout(7000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.fetch(key, function(callback) {
             return callback(null, { foo: 'bar' });
@@ -807,7 +807,7 @@ describe('PettyCache.fetch', function() {
     it('PettyCache.fetch should cache null values returned by func', function(done) {
         this.timeout(7000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.fetch(key, function(callback) {
             return callback(null, null);
@@ -833,7 +833,7 @@ describe('PettyCache.fetch', function() {
     it('PettyCache.fetch should cache undefined values returned by func', function(done) {
         this.timeout(7000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.fetch(key, function(callback) {
             return callback(null, undefined);
@@ -857,10 +857,10 @@ describe('PettyCache.fetch', function() {
     });
 
     it('PettyCache.fetch should lock around func', function(done) {
-        var key = Math.random().toString();
-        var numberOfFuncCalls = 0;
+        const key = Math.random().toString();
+        let numberOfFuncCalls = 0;
 
-        var func = function(callback) {
+        const func = function(callback) {
             setTimeout(function() {
                 callback(null, ++numberOfFuncCalls);
             }, 100);
@@ -885,10 +885,10 @@ describe('PettyCache.fetch', function() {
     it('PettyCache.fetch should run func again after TTL', function(done) {
         this.timeout(7000);
 
-        var key = Math.random().toString();
-        var numberOfFuncCalls = 0;
+        const key = Math.random().toString();
+        let numberOfFuncCalls = 0;
 
-        var func = function(callback) {
+        const func = function(callback) {
             setTimeout(function() {
                 callback(null, ++numberOfFuncCalls);
             }, 100);
@@ -914,14 +914,14 @@ describe('PettyCache.fetch', function() {
 
     it('PettyCache.fetch should lock around Redis', function(done) {
         redisClient.info('commandstats', function(err, info) {
-            var lineBefore = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
-            var tokenBefore = lineBefore.split(/:|,/).find(i => i.startsWith('calls='));
-            var callsBefore = parseInt(tokenBefore.split('=')[1]);
+            const lineBefore = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
+            const tokenBefore = lineBefore.split(/:|,/).find(i => i.startsWith('calls='));
+            const callsBefore = parseInt(tokenBefore.split('=')[1]);
 
-            var key = Math.random().toString();
-            var numberOfFuncCalls = 0;
+            const key = Math.random().toString();
+            let numberOfFuncCalls = 0;
 
-            var func = function(callback) {
+            const func = function(callback) {
                 setTimeout(function() {
                     callback(null, ++numberOfFuncCalls);
                 }, 100);
@@ -941,9 +941,9 @@ describe('PettyCache.fetch', function() {
                 assert.equal(data, 1);
 
                 redisClient.info('commandstats', function(err, info) {
-                    var lineAfter = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
-                    var tokenAfter = lineAfter.split(/:|,/).find(i => i.startsWith('calls='));
-                    var callsAfter = parseInt(tokenAfter.split('=')[1]);
+                    const lineAfter = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
+                    const tokenAfter = lineAfter.split(/:|,/).find(i => i.startsWith('calls='));
+                    const callsAfter = parseInt(tokenAfter.split('=')[1]);
 
                     assert.strictEqual(callsBefore + 2, callsAfter);
 
@@ -1053,7 +1053,7 @@ describe('PettyCache.fetchAndRefresh', function() {
     it('PettyCache.fetchAndRefresh', function(done) {
         this.timeout(7000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.fetchAndRefresh(key, function(callback) {
             return callback(null, { foo: 'bar' });
@@ -1080,7 +1080,7 @@ describe('PettyCache.fetchAndRefresh', function() {
         this.timeout(7000);
 
         const key = Math.random().toString();
-        var numberOfFuncCalls = 0;
+        let numberOfFuncCalls = 0;
 
         const func = function(callback) {
             setTimeout(function() {
@@ -1183,7 +1183,7 @@ describe('PettyCache.get', function() {
     it('PettyCache.get should return value', function(done) {
         this.timeout(7000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', function() {
             pettyCache.get(key, function(err, value) {
@@ -1201,7 +1201,7 @@ describe('PettyCache.get', function() {
     });
 
     it('PettyCache.get should return null for missing keys', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.get(key, function(err, value) {
             assert.strictEqual(value, null);
@@ -1401,7 +1401,7 @@ describe('PettyCache.mutex', function() {
 });
 
 describe('PettyCache.patch', function() {
-    var key = Math.random().toString();
+    const key = Math.random().toString();
 
     before(function(done) {
         pettyCache.set(key, { a: 1, b: 2, c: 3 }, done);
@@ -1442,7 +1442,7 @@ describe('PettyCache.patch', function() {
 describe('PettyCache.semaphore', function() {
     describe('PettyCache.semaphore.acquireLock', function() {
         it('should aquire a lock', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 10 }, function(err) {
                 assert.ifError(err);
@@ -1461,7 +1461,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should not aquire a lock', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, function(err) {
                 assert.ifError(err);
@@ -1479,7 +1479,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should aquire a lock after ttl', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, function(err) {
                 assert.ifError(err);
@@ -1506,7 +1506,7 @@ describe('PettyCache.semaphore', function() {
         it('should aquire a lock with specified options', function(done) {
             this.timeout(5000);
 
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 10 }, function(err) {
                 assert.ifError(err);
@@ -1525,7 +1525,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should fail if the semaphore does not exist', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.acquireLock(key, 0, function(err) {
                 assert(err);
@@ -1537,7 +1537,7 @@ describe('PettyCache.semaphore', function() {
 
     describe('PettyCache.semaphore.consumeLock', function() {
         it('should consume a lock', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
                 assert.ifError(err);
@@ -1568,7 +1568,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should ensure at least one lock is not consumed', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
                 assert.ifError(err);
@@ -1604,7 +1604,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should fail if the semaphore does not exist', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.consumeLock(key, 0, function(err) {
                 assert(err);
@@ -1614,7 +1614,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should fail if index is larger than semaphore', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
                 assert.ifError(err);
@@ -1633,7 +1633,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('callback is optional', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
                 assert.ifError(err);
@@ -1664,7 +1664,7 @@ describe('PettyCache.semaphore', function() {
 
     describe('PettyCache.semaphore.expand', function() {
         it('should increase the size of a semaphore pool', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err, pool) {
                 assert.ifError(err);
@@ -1683,7 +1683,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should refuse to shrink a pool', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err, pool) {
                 assert.ifError(err);
@@ -1698,7 +1698,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should succeed if pool size is already equal to the specified size', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err, pool) {
                 assert.ifError(err);
@@ -1717,7 +1717,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('callback is optional', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err, pool) {
                 assert.ifError(err);
@@ -1734,7 +1734,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should fail if the semaphore does not exist', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.expand(key, 10, function(err) {
                 assert(err);
@@ -1746,7 +1746,7 @@ describe('PettyCache.semaphore', function() {
 
     describe('PettyCache.semaphore.releaseLock', function() {
         it('should release a lock', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, function(err) {
                 assert.ifError(err);
@@ -1773,7 +1773,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should fail to release a lock outside of the semaphore size', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, function(err) {
                 assert.ifError(err);
@@ -1792,7 +1792,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('callback is optional', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, function(err) {
                 assert.ifError(err);
@@ -1817,7 +1817,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should fail if the semaphore does not exist', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.releaseLock(key, 10, function(err) {
                 assert(err);
@@ -1829,7 +1829,7 @@ describe('PettyCache.semaphore', function() {
 
     describe('PettyCache.semaphore.reset', function() {
         it('should reset all locks', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
                 assert.ifError(err);
@@ -1861,7 +1861,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('callback is optional', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
                 assert.ifError(err);
@@ -1891,7 +1891,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should fail if the semaphore does not exist', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.reset(key, function(err) {
                 assert(err);
@@ -1903,7 +1903,7 @@ describe('PettyCache.semaphore', function() {
 
     describe('PettyCache.semaphore.retrieveOrCreate', function() {
         it('should create a new semaphore', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 100 }, function(err, semaphore) {
                 assert.ifError(err);
@@ -1922,7 +1922,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should have a min size of 1', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 0 }, function(err, semaphore) {
                 assert.ifError(err);
@@ -1941,7 +1941,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('should allow options.size to provide a function', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: (callback) => callback(null, 1 + 1) }, function(err, semaphore) {
                 assert.ifError(err);
@@ -1960,7 +1960,7 @@ describe('PettyCache.semaphore', function() {
         });
 
         it('callback is optional', function(done) {
-            var key = Math.random().toString();
+            const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key);
 
@@ -1979,7 +1979,7 @@ describe('PettyCache.set', function() {
     it('PettyCache.set should set a value', function(done) {
         this.timeout(7000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', function() {
             pettyCache.get(key, function(err, value) {
@@ -2004,7 +2004,7 @@ describe('PettyCache.set', function() {
     it('PettyCache.set should set a value with the specified TTL option', function(done) {
         this.timeout(7000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', { ttl: 6000 },function() {
             pettyCache.get(key, function(err, value) {
@@ -2024,7 +2024,7 @@ describe('PettyCache.set', function() {
     it('PettyCache.set should set a value with the specified TTL option using max and min', function(done) {
         this.timeout(10000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', { ttl: { max: 7000, min: 6000 } },function() {
             pettyCache.get(key, function(err, value) {
@@ -2051,7 +2051,7 @@ describe('PettyCache.set', function() {
     it('PettyCache.set should set a value with the specified TTL option using min only', function(done) {
         this.timeout(10000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', { ttl: { min: 6000 } },function() {
             pettyCache.get(key, function(err, value) {
@@ -2064,7 +2064,7 @@ describe('PettyCache.set', function() {
     it('PettyCache.set should set a value with the specified TTL option using max only', function(done) {
         this.timeout(10000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', { ttl: { max: 10000 } },function() {
             pettyCache.get(key, function(err, value) {
@@ -2077,7 +2077,7 @@ describe('PettyCache.set', function() {
     it('PettyCache.set(key, \'\')', function(done) {
         this.timeout(11000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, '', { ttl: 7000 }, function(err) {
             assert.ifError(err);
@@ -2109,7 +2109,7 @@ describe('PettyCache.set', function() {
     it('PettyCache.set(key, 0)', function(done) {
         this.timeout(11000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, 0, { ttl: 7000 }, function(err) {
             assert.ifError(err);
@@ -2141,7 +2141,7 @@ describe('PettyCache.set', function() {
     it('PettyCache.set(key, false)', function(done) {
         this.timeout(11000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, false, { ttl: 7000 }, function(err) {
             assert.ifError(err);
@@ -2173,7 +2173,7 @@ describe('PettyCache.set', function() {
     it('PettyCache.set(key, NaN)', function(done) {
         this.timeout(11000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, NaN, { ttl: 7000 }, function(err) {
             assert.ifError(err);
@@ -2205,7 +2205,7 @@ describe('PettyCache.set', function() {
     it('PettyCache.set(key, null)', function(done) {
         this.timeout(11000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, null, { ttl: 7000 }, function(err) {
             assert.ifError(err);
@@ -2237,7 +2237,7 @@ describe('PettyCache.set', function() {
     it('PettyCache.set(key, undefined)', function(done) {
         this.timeout(11000);
 
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         pettyCache.set(key, undefined, { ttl: 7000 }, function(err) {
             assert.ifError(err);
@@ -2269,13 +2269,13 @@ describe('PettyCache.set', function() {
 
 describe('redisClient', function() {
     it('redisClient.mget(falsy keys)', function(done) {
-        var key1 = Math.random().toString();
-        var key2 = Math.random().toString();
-        var key3 = Math.random().toString();
-        var key4 = Math.random().toString();
-        var key5 = Math.random().toString();
-        var key6 = Math.random().toString();
-        var values = {};
+        const key1 = Math.random().toString();
+        const key2 = Math.random().toString();
+        const key3 = Math.random().toString();
+        const key4 = Math.random().toString();
+        const key5 = Math.random().toString();
+        const key6 = Math.random().toString();
+        const values = {};
 
         values[key1] = '';
         values[key2] = 0;
@@ -2289,7 +2289,7 @@ describe('redisClient', function() {
         }, function(err) {
             assert.ifError(err);
 
-            var keys = Object.keys(values);
+            const keys = Object.keys(values);
 
             // Add an additional key to check handling of missing keys
             keys.push(Math.random().toString());
@@ -2317,7 +2317,7 @@ describe('redisClient', function() {
     });
 
     it('redisClient.psetex(key, \'\')', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(''), function(err) {
             assert.ifError(err);
@@ -2340,7 +2340,7 @@ describe('redisClient', function() {
     });
 
     it('redisClient.psetex(key, 0)', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(0), function(err) {
             assert.ifError(err);
@@ -2363,7 +2363,7 @@ describe('redisClient', function() {
     });
 
     it('redisClient.psetex(key, false)', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(false), function(err) {
             assert.ifError(err);
@@ -2386,7 +2386,7 @@ describe('redisClient', function() {
     });
 
     it('redisClient.psetex(key, NaN)', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(NaN), function(err) {
             assert.ifError(err);
@@ -2409,7 +2409,7 @@ describe('redisClient', function() {
     });
 
     it('redisClient.psetex(key, null)', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(null), function(err) {
             assert.ifError(err);
@@ -2432,7 +2432,7 @@ describe('redisClient', function() {
     });
 
     it('redisClient.psetex(key, undefined)', function(done) {
-        var key = Math.random().toString();
+        const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(undefined), function(err) {
             assert.ifError(err);
@@ -2459,12 +2459,12 @@ describe('Benchmark', function() {
     const emojis = require('./emojis.json');
 
     it('PettyCache should be faster than node-redis', function(done) {
-        var pettyCacheEnd;
-        var pettyCacheKey = Math.random().toString();
-        var pettyCacheStart;
-        var redisEnd;
-        var redisKey = Math.random().toString();
-        var redisStart = Date.now();
+        let pettyCacheEnd;
+        const pettyCacheKey = Math.random().toString();
+        let pettyCacheStart;
+        let redisEnd;
+        const redisKey = Math.random().toString();
+        const redisStart = Date.now();
 
         redisClient.psetex(redisKey, 30000, JSON.stringify(emojis), function(err) {
             assert.ifError(err);

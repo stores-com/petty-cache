@@ -25,9 +25,9 @@ function PettyCache() {
 
             const values = {};
 
-            for (var i = 0; i < keys.length; i++) {
-                var key = keys[i];
-                var value = data[i];
+            for (let i = 0; i < keys.length; i++) {
+                const key = keys[i];
+                const value = data[i];
 
                 if (value === null) {
                     values[key] = { exists: false };
@@ -119,7 +119,7 @@ function PettyCache() {
         const values = {};
 
         // Try to get values from memory cache
-        for (var i = _keys.length - 1; i >= 0; i--) {
+        for (let i = _keys.length - 1; i >= 0; i--) {
             const key = _keys[i];
             const result = getFromMemoryCache(key);
 
@@ -142,7 +142,7 @@ function PettyCache() {
                 return callback(err);
             }
 
-            for (var i = _keys.length - 1; i >= 0; i--) {
+            for (let i = _keys.length - 1; i >= 0; i--) {
                 const key = _keys[i];
                 const result = results[key];
 
@@ -186,7 +186,7 @@ function PettyCache() {
         const values = {};
 
         // Try to get values from memory cache
-        for (var i = _keys.length - 1; i >= 0; i--) {
+        for (let i = _keys.length - 1; i >= 0; i--) {
             const key = _keys[i];
             const result = getFromMemoryCache(key);
 
@@ -207,9 +207,9 @@ function PettyCache() {
                 return callback(err);
             }
 
-            for (var i = 0; i < _keys.length; i++) {
-                var key = _keys[i];
-                var result = results[key];
+            for (let i = 0; i < _keys.length; i++) {
+                const key = _keys[i];
+                const result = results[key];
 
                 if (!result.exists) {
                     values[key] = null;
@@ -289,7 +289,7 @@ function PettyCache() {
         callback = callback || function() {};
 
         // Try to get value from memory cache
-        var result = getFromMemoryCache(key);
+        let result = getFromMemoryCache(key);
 
         // Return value from memory cache if it exists
         if (result.exists) {
@@ -558,7 +558,7 @@ function PettyCache() {
                 return callback(new Error(`Key ${key} does not exist`));
             }
 
-            for (var k in value) {
+            for (let k in value) {
                 data[k] = value[k];
             }
 
@@ -601,10 +601,10 @@ function PettyCache() {
                             return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Semaphore ${key} doesn't exist.`)); });
                         }
 
-                        var pool = JSON.parse(data);
+                        const pool = JSON.parse(data);
 
                         // Try to find a slot that's available.
-                        var index = pool.findIndex(s => s.status === 'available');
+                        let index = pool.findIndex(s => s.status === 'available');
 
                         if (index === -1) {
                             index = pool.findIndex(s => s.ttl <= Date.now());
@@ -650,7 +650,7 @@ function PettyCache() {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Semaphore ${key} doesn't exist.`)); });
                     }
 
-                    var pool = JSON.parse(data);
+                    const pool = JSON.parse(data);
 
                     // Ensure index exists.
                     if (pool.length <= index) {
@@ -695,7 +695,7 @@ function PettyCache() {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Semaphore ${key} doesn't exist.`)); });
                     }
 
-                    var pool = JSON.parse(data);
+                    let pool = JSON.parse(data);
 
                     if (pool.length > size) {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Cannot shrink pool, size is ${pool.length} and you requested a size of ${size}.`)); });
@@ -739,7 +739,7 @@ function PettyCache() {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Semaphore ${key} doesn't exist.`)); });
                     }
 
-                    var pool = JSON.parse(data);
+                    const pool = JSON.parse(data);
 
                     // Ensure index exists.
                     if (pool.length <= index) {
@@ -781,7 +781,7 @@ function PettyCache() {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Semaphore ${key} doesn't exist.`)); });
                     }
 
-                    var pool = JSON.parse(data);
+                    let pool = JSON.parse(data);
                     pool = Array(pool.length).fill({ status: 'available' });
 
                     redisClient.set(key, JSON.stringify(pool), function(err) {
@@ -824,7 +824,7 @@ function PettyCache() {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(null, JSON.parse(data)); });
                     }
 
-                    var getSize = function(callback) {
+                    const getSize = function(callback) {
                         if (typeof options.size === 'function') {
                             return options.size(callback);
                         }
@@ -838,7 +838,7 @@ function PettyCache() {
                             return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
                         }
 
-                        var pool = Array(Math.max(size, 1)).fill({ status: 'available' });
+                        const pool = Array(Math.max(size, 1)).fill({ status: 'available' });
 
                         redisClient.set(key, JSON.stringify(pool), function(err) {
                             if (err) {
@@ -875,7 +875,7 @@ function PettyCache() {
     };
 
     // Semaphore functions need to be bound to the main PettyCache object
-    for (var method in this.semaphore) {
+    for (const method in this.semaphore) {
         this.semaphore[method] = this.semaphore[method].bind(this);
     }
 }
