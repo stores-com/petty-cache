@@ -8,8 +8,7 @@
     "description": "A cache module for node.js that uses a two-level cache (in-memory cache for recently accessed data plus Redis for distributed caching) with some extra features to avoid cache stampedes and thundering herds.",
     "devDependencies": {
         "@eslint/js": "*",
-        "globals": "*",
-        "mocha": "*"
+        "globals": "*"
     },
     "homepage": "https://github.com/stores-com/petty-cache",
     "keywords": [
@@ -24,8 +23,8 @@
     "name": "petty-cache",
     "repository": "https://github.com/stores-com/petty-cache",
     "scripts": {
-        "coveralls": "nyc npm test && nyc report --reporter=text-lcov | coveralls",
-        "test": "mocha --exit --reporter spec"
+        "coveralls": "node --test --test-concurrency=true --test-force-exit --experimental-test-coverage --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=lcov.info && coveralls < lcov.info",
+        "test": "node --test --test-concurrency=true --test-force-exit --test-reporter=spec"
     },
     "version": "3.5.1"
 }

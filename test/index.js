@@ -1,4 +1,5 @@
-const assert = require('assert');
+const { before, describe, it } = require('node:test');
+const assert = require('node:assert');
 const timers = require('node:timers/promises');
 
 const async = require('async');
@@ -11,9 +12,8 @@ const redisClient = redis.createClient();
 const pettyCache = new PettyCache(redisClient);
 
 describe('new PettyCache()', function() {
-    it('new PettyCache()', function(done) {
-        this.timeout(7000);
-
+    it('new PettyCache()', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
         const newPettyCache = new PettyCache();
 
@@ -31,16 +31,16 @@ describe('new PettyCache()', function() {
                         throw 'This function should not be called';
                     }, function(err, data) {
                         assert.strictEqual(data.foo, 'bar');
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
+});
 
-    it('new PettyCache(port, host)', function(done) {
-        this.timeout(7000);
-
+    it('new PettyCache(port, host)', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
         const newPettyCache = new PettyCache(6379, 'localhost');
 
@@ -58,16 +58,16 @@ describe('new PettyCache()', function() {
                         throw 'This function should not be called';
                     }, function(err, data) {
                         assert.strictEqual(data.foo, 'bar');
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
+});
 
-    it('new PettyCache(redisClient)', function(done) {
-        this.timeout(7000);
-
+    it('new PettyCache(redisClient)', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
         const redisClient = redis.createClient();
         const newPettyCache = new PettyCache(redisClient);
@@ -86,16 +86,18 @@ describe('new PettyCache()', function() {
                         throw 'This function should not be called';
                     }, function(err, data) {
                         assert.strictEqual(data.foo, 'bar');
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
 });
+});
 
 describe('memory-cache', function() {
-    it('memoryCache.put(key, \'\')', function(done) {
+    it('memoryCache.put(key, \'\')', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         memoryCache.put(key, '', 1000);
@@ -106,11 +108,13 @@ describe('memory-cache', function() {
         setTimeout(function() {
             assert(!memoryCache.keys().includes(key));
             assert.strictEqual(memoryCache.get(key), null);
-            done();
+            resolve();
         }, 1001);
     });
+});
 
-    it('memoryCache.put(key, 0)', function(done) {
+    it('memoryCache.put(key, 0)', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         memoryCache.put(key, 0, 1000);
@@ -121,11 +125,13 @@ describe('memory-cache', function() {
         setTimeout(function() {
             assert(!memoryCache.keys().includes(key));
             assert.strictEqual(memoryCache.get(key), null);
-            done();
+            resolve();
         }, 1001);
     });
+});
 
-    it('memoryCache.put(key, false)', function(done) {
+    it('memoryCache.put(key, false)', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         memoryCache.put(key, false, 1000);
@@ -136,11 +142,13 @@ describe('memory-cache', function() {
         setTimeout(function() {
             assert(!memoryCache.keys().includes(key));
             assert.strictEqual(memoryCache.get(key), null);
-            done();
+            resolve();
         }, 1001);
     });
+});
 
-    it('memoryCache.put(key, NaN)', function(done) {
+    it('memoryCache.put(key, NaN)', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         memoryCache.put(key, NaN, 1000);
@@ -151,11 +159,13 @@ describe('memory-cache', function() {
         setTimeout(function() {
             assert(!memoryCache.keys().includes(key));
             assert.strictEqual(memoryCache.get(key), null);
-            done();
+            resolve();
         }, 1001);
     });
+});
 
-    it('memoryCache.put(key, null)', function(done) {
+    it('memoryCache.put(key, null)', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         memoryCache.put(key, null, 1000);
@@ -166,11 +176,13 @@ describe('memory-cache', function() {
         setTimeout(function() {
             assert(!memoryCache.keys().includes(key));
             assert.strictEqual(memoryCache.get(key), null);
-            done();
+            resolve();
         }, 1001);
     });
+});
 
-    it('memoryCache.put(key, undefined)', function(done) {
+    it('memoryCache.put(key, undefined)', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         memoryCache.put(key, undefined, 1000);
@@ -181,15 +193,15 @@ describe('memory-cache', function() {
         setTimeout(function() {
             assert(!memoryCache.keys().includes(key));
             assert.strictEqual(memoryCache.get(key), null);
-            done();
+            resolve();
         }, 1001);
     });
 });
+});
 
 describe('PettyCache.bulkFetch', function() {
-    it('PettyCache.bulkFetch', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.bulkFetch', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         pettyCache.set('a', 1, function() {
             pettyCache.set('b', '2', function() {
                 pettyCache.bulkFetch(['a', 'b', 'c', 'd'], function(keys, callback) {
@@ -229,7 +241,7 @@ describe('PettyCache.bulkFetch', function() {
                                     assert.strictEqual(values.b, '2');
                                     assert.strictEqual(values.c[0], 3);
                                     assert.strictEqual(values.d.num, 4);
-                                    done();
+                                    resolve();
                                 });
                             });
                         }, 5001);
@@ -238,10 +250,10 @@ describe('PettyCache.bulkFetch', function() {
             });
         });
     });
+});
 
-    it('PettyCache.bulkFetch should cache null values returned by func', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.bulkFetch should cache null values returned by func', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
 
@@ -275,37 +287,41 @@ describe('PettyCache.bulkFetch', function() {
                         assert.strictEqual(data[key1], '1');
                         assert.strictEqual(data[key2], null);
 
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
+});
 
-    it('PettyCache.bulkFetch should return empty object when no keys are passed', function(done) {
+    it('PettyCache.bulkFetch should return empty object when no keys are passed', async function() {
+ await new Promise(function(resolve) {
         pettyCache.bulkFetch([], function() {
             throw 'This function should not be called';
         }, function(err, values) {
             assert.ifError(err);
             assert.deepEqual(values, {});
-            done();
+            resolve();
         });
     });
+});
 
-    it('PettyCache.bulkFetch should return error if func returns error', function(done) {
+    it('PettyCache.bulkFetch should return error if func returns error', async function() {
+ await new Promise(function(resolve) {
         pettyCache.bulkFetch([Math.random().toString()], function(keys, callback) {
             callback(new Error('PettyCache.bulkFetch should return error if func returns error'));
         }, function(err, values) {
             assert(err);
             assert.strictEqual(err.message, 'PettyCache.bulkFetch should return error if func returns error');
             assert(!values);
-            done();
+            resolve();
         });
     });
+});
 
-    it('PettyCache.bulkFetch should run func again after TTL', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.bulkFetch should run func again after TTL', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const keys = [Math.random().toString(), Math.random().toString()];
         let numberOfFuncCalls = 0;
 
@@ -345,7 +361,7 @@ describe('PettyCache.bulkFetch', function() {
                             assert.ifError(err);
                             assert.strictEqual(results[keys[0]], 2);
                             assert.strictEqual(results[keys[1]], 2);
-                            done();
+                            resolve();
                         });
                     });
                 });
@@ -353,11 +369,11 @@ describe('PettyCache.bulkFetch', function() {
         });
     });
 });
+});
 
 describe('PettyCache.bulkGet', function() {
-    it('PettyCache.bulkGet should return values', function(done) {
-        this.timeout(6000);
-
+    it('PettyCache.bulkGet should return values', { timeout: 6000 }, async function() {
+ await new Promise(function(resolve) {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
         const key3 = Math.random().toString();
@@ -386,7 +402,7 @@ describe('PettyCache.bulkGet', function() {
                                     assert.strictEqual(values[key1], '1');
                                     assert.strictEqual(values[key2], '2');
                                     assert.strictEqual(values[key3], '3');
-                                    done();
+                                    resolve();
                                 });
                             }, 5001);
                         });
@@ -395,10 +411,10 @@ describe('PettyCache.bulkGet', function() {
             });
         });
     });
+});
 
-    it('PettyCache.bulkGet should return null for missing keys', function(done) {
-        this.timeout(6000);
-
+    it('PettyCache.bulkGet should return null for missing keys', { timeout: 6000 }, async function() {
+ await new Promise(function(resolve) {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
         const key3 = Math.random().toString();
@@ -426,7 +442,7 @@ describe('PettyCache.bulkGet', function() {
                                 assert.strictEqual(values[key1], '1');
                                 assert.strictEqual(values[key2], '2');
                                 assert.strictEqual(values[key3], null);
-                                done();
+                                resolve();
                             });
                         }, 5001);
                     });
@@ -434,10 +450,10 @@ describe('PettyCache.bulkGet', function() {
             });
         });
     });
+});
 
-    it('PettyCache.bulkGet should correctly handle falsy values', function(done) {
-        this.timeout(12000);
-
+    it('PettyCache.bulkGet should correctly handle falsy values', { timeout: 12000 }, async function() {
+ await new Promise(function(resolve) {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
         const key3 = Math.random().toString();
@@ -505,7 +521,7 @@ describe('PettyCache.bulkGet', function() {
                                 assert.strictEqual(data[key5], null);
                                 assert.strictEqual(data[key6], null);
                                 assert.strictEqual(data[key7], null);
-                                done();
+                                resolve();
                             });
                         }, 6001);
                     });
@@ -513,20 +529,22 @@ describe('PettyCache.bulkGet', function() {
             });
         });
     });
+});
 
-    it('PettyCache.bulkGet should return empty object when no keys are passed', function(done) {
+    it('PettyCache.bulkGet should return empty object when no keys are passed', async function() {
+ await new Promise(function(resolve) {
         pettyCache.bulkGet([], function(err, values) {
             assert.ifError(err);
             assert.deepEqual(values, {});
-            done();
+            resolve();
         });
     });
 });
+});
 
 describe('PettyCache.bulkSet', function() {
-    it('PettyCache.bulkSet should set values', function(done) {
-        this.timeout(6000);
-
+    it('PettyCache.bulkSet should set values', { timeout: 6000 }, async function() {
+ await new Promise(function(resolve) {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
         const key3 = Math.random().toString();
@@ -564,7 +582,7 @@ describe('PettyCache.bulkSet', function() {
                                     pettyCache.get(key3, function(err, value) {
                                         assert.ifError(err);
                                         assert.strictEqual(value, '3');
-                                        done();
+                                        resolve();
                                     });
                                 });
                             });
@@ -574,10 +592,10 @@ describe('PettyCache.bulkSet', function() {
             });
         });
     });
+});
 
-    it('PettyCache.bulkSet should set values with the specified TTL option', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.bulkSet should set values with the specified TTL option', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
         const key3 = Math.random().toString();
@@ -615,7 +633,7 @@ describe('PettyCache.bulkSet', function() {
                                     pettyCache.get(key3, function(err, value) {
                                         assert.ifError(err);
                                         assert.strictEqual(value, null);
-                                        done();
+                                        resolve();
                                     });
                                 });
                             });
@@ -625,10 +643,10 @@ describe('PettyCache.bulkSet', function() {
             });
         });
     });
+});
 
-    it('PettyCache.bulkSet should set values with the specified TTL option using max and min', function(done) {
-        this.timeout(10000);
-
+    it('PettyCache.bulkSet should set values with the specified TTL option using max and min', { timeout: 10000 }, async function() {
+ await new Promise(function(resolve) {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
         const key3 = Math.random().toString();
@@ -666,7 +684,7 @@ describe('PettyCache.bulkSet', function() {
                                     pettyCache.get(key3, function(err, value) {
                                         assert.ifError(err);
                                         assert.strictEqual(value, null);
-                                        done();
+                                        resolve();
                                     });
                                 });
                             });
@@ -676,10 +694,10 @@ describe('PettyCache.bulkSet', function() {
             });
         });
     });
+});
 
-    it('PettyCache.bulkSet should set values with the specified TTL option using max only', function(done) {
-        this.timeout(10000);
-
+    it('PettyCache.bulkSet should set values with the specified TTL option using max only', { timeout: 10000 }, async function() {
+ await new Promise(function(resolve) {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
         const key3 = Math.random().toString();
@@ -696,14 +714,14 @@ describe('PettyCache.bulkSet', function() {
                 assert.ifError(err);
                 assert.strictEqual(value, '1');
 
-                done();
+                resolve();
             });
         });
     });
+});
 
-    it('PettyCache.bulkSet should set values with the specified TTL option using min only', function(done) {
-        this.timeout(10000);
-
+    it('PettyCache.bulkSet should set values with the specified TTL option using min only', { timeout: 10000 }, async function() {
+ await new Promise(function(resolve) {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
         const key3 = Math.random().toString();
@@ -720,14 +738,16 @@ describe('PettyCache.bulkSet', function() {
                 assert.ifError(err);
                 assert.strictEqual(value, '1');
 
-                done();
+                resolve();
             });
         });
     });
 });
+});
 
 describe('PettyCache.del', function() {
-    it('PettyCache.del', function(done) {
+    it('PettyCache.del', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, key.split('').reverse().join(''), function(err) {
@@ -745,15 +765,17 @@ describe('PettyCache.del', function() {
 
                         pettyCache.del(key, function(err) {
                             assert.ifError(err);
-                            done();
+                            resolve();
                         });
                     });
                 });
             });
         });
     });
+});
 
-    it('PettyCache.del', function(done) {
+    it('PettyCache.del', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, key.split('').reverse().join(''), function(err) {
@@ -770,17 +792,17 @@ describe('PettyCache.del', function() {
 
                     await pettyCache.del(key);
 
-                    done();
+                    resolve();
                 });
             });
         });
     });
 });
+});
 
 describe('PettyCache.fetch', function() {
-    it('PettyCache.fetch', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.fetch', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.fetch(key, function(callback) {
@@ -797,16 +819,16 @@ describe('PettyCache.fetch', function() {
                         throw 'This function should not be called';
                     }, function(err, data) {
                         assert.strictEqual(data.foo, 'bar');
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
+});
 
-    it('PettyCache.fetch should cache null values returned by func', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.fetch should cache null values returned by func', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.fetch(key, function(callback) {
@@ -823,16 +845,16 @@ describe('PettyCache.fetch', function() {
                         throw 'This function should not be called';
                     }, function(err, data) {
                         assert.strictEqual(data, null);
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
+});
 
-    it('PettyCache.fetch should cache undefined values returned by func', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.fetch should cache undefined values returned by func', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.fetch(key, function(callback) {
@@ -849,14 +871,16 @@ describe('PettyCache.fetch', function() {
                         throw 'This function should not be called';
                     }, function(err, data) {
                         assert.strictEqual(data, undefined);
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
+});
 
-    it('PettyCache.fetch should lock around func', function(done) {
+    it('PettyCache.fetch should lock around func', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
         let numberOfFuncCalls = 0;
 
@@ -878,13 +902,13 @@ describe('PettyCache.fetch', function() {
 
         pettyCache.fetch(key, func, function(err, data) {
             assert.equal(data, 1);
-            done();
+            resolve();
         });
     });
+});
 
-    it('PettyCache.fetch should run func again after TTL', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.fetch should run func again after TTL', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
         let numberOfFuncCalls = 0;
 
@@ -905,14 +929,16 @@ describe('PettyCache.fetch', function() {
 
                     pettyCache.fetch(key, func, { ttl: 6000 }, function(err, data) {
                         assert.equal(data, 2);
-                        done();
+                        resolve();
                     });
                 });
             }, 6001);
         });
     });
+});
 
-    it('PettyCache.fetch should lock around Redis', function(done) {
+    it('PettyCache.fetch should lock around Redis', async function() {
+ await new Promise(function(resolve) {
         redisClient.info('commandstats', function(err, info) {
             const lineBefore = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
             const tokenBefore = lineBefore.split(/:|,/).find(i => i.startsWith('calls='));
@@ -947,26 +973,28 @@ describe('PettyCache.fetch', function() {
 
                     assert.strictEqual(callsBefore + 2, callsAfter);
 
-                    done();
+                    resolve();
                 });
             });
         });
     });
+});
 
-    it('PettyCache.fetch should return error if func returns error', function(done) {
+    it('PettyCache.fetch should return error if func returns error', async function() {
+ await new Promise(function(resolve) {
         pettyCache.fetch(Math.random().toString(), function(callback) {
             callback(new Error('PettyCache.fetch should return error if func returns error'));
         }, function(err, values) {
             assert(err);
             assert.strictEqual(err.message, 'PettyCache.fetch should return error if func returns error');
             assert(!values);
-            done();
+            resolve();
         });
     });
+});
 
-    it('PettyCache.fetch should support async func', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.fetch should support async func', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.fetch(key, async () => {
@@ -985,16 +1013,16 @@ describe('PettyCache.fetch', function() {
                     }, function(err, data) {
                         assert.ifError(err);
                         assert.strictEqual(data.foo, 'bar');
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
+});
 
-    it('PettyCache.fetch should support async func with callback', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.fetch should support async func with callback', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.fetch(key, async (callback) => {
@@ -1013,16 +1041,16 @@ describe('PettyCache.fetch', function() {
                     }, function(err, data) {
                         assert.ifError(err);
                         assert.strictEqual(data.foo, 'bar');
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
+});
 
-    it('PettyCache.fetch should support sync func without callback', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.fetch should support sync func without callback', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.fetch(key, () => {
@@ -1041,18 +1069,18 @@ describe('PettyCache.fetch', function() {
                     }, function(err, data) {
                         assert.ifError(err);
                         assert.strictEqual(data.foo, 'bar');
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
 });
+});
 
 describe('PettyCache.fetchAndRefresh', function() {
-    it('PettyCache.fetchAndRefresh', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.fetchAndRefresh', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.fetchAndRefresh(key, function(callback) {
@@ -1069,16 +1097,16 @@ describe('PettyCache.fetchAndRefresh', function() {
                         throw 'This function should not be called';
                     }, function(err, data) {
                         assert.strictEqual(data.foo, 'bar');
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
+});
 
-    it('PettyCache.fetchAndRefresh should run func again to refresh', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.fetchAndRefresh should run func again to refresh', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
         let numberOfFuncCalls = 0;
 
@@ -1099,16 +1127,16 @@ describe('PettyCache.fetchAndRefresh', function() {
 
                     pettyCache.fetchAndRefresh(key, func, { ttl: 6000 }, function(err, data) {
                         assert.equal(data, 2);
-                        done();
+                        resolve();
                     });
                 });
             }, 4001);
         });
     });
+});
 
-    it('PettyCache.fetchAndRefresh should not allow multiple clients to execute func at the same time', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.fetchAndRefresh should not allow multiple clients to execute func at the same time', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
         let numberOfFuncCalls = 0;
 
@@ -1136,17 +1164,17 @@ describe('PettyCache.fetchAndRefresh', function() {
                         pettyCache2.fetchAndRefresh(key, func, { ttl: 6000 }, function(err, data) {
                             assert.ifError(err);
                             assert.equal(data, 2);
-                            done();
+                            resolve();
                         });
                     });
                 }, 5001);
             });
         });
     });
+});
 
-    it('PettyCache.fetchAndRefresh should return error if func returns error', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.fetchAndRefresh should return error if func returns error', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         const func = function(callback) {
@@ -1164,25 +1192,27 @@ describe('PettyCache.fetchAndRefresh', function() {
                     assert.strictEqual(err.message, 'PettyCache.fetchAndRefresh should return error if func returns error');
                     assert(!data);
 
-                    done();
+                    resolve();
                 });
             }, 4001);
         });
     });
+});
 
-    it('PettyCache.fetchAndRefresh should not require options', function(done) {
+    it('PettyCache.fetchAndRefresh should not require options', async function() {
+ await new Promise(function(resolve) {
         pettyCache.fetchAndRefresh(Math.random().toString(), function(callback) {
             return callback(null, { foo: 'bar' });
         });
 
-        done();
+        resolve();
     });
+});
 });
 
 describe('PettyCache.get', function() {
-    it('PettyCache.get should return value', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.get should return value', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', function() {
@@ -1193,14 +1223,16 @@ describe('PettyCache.get', function() {
                 setTimeout(function() {
                     pettyCache.get(key, function(err, value) {
                         assert.equal(value, 'hello world');
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
+});
 
-    it('PettyCache.get should return null for missing keys', function(done) {
+    it('PettyCache.get should return null for missing keys', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.get(key, function(err, value) {
@@ -1208,15 +1240,17 @@ describe('PettyCache.get', function() {
 
             pettyCache.get(key, function(err, value) {
                 assert.strictEqual(value, null);
-                done();
+                resolve();
             });
         });
     });
 });
+});
 
 describe('PettyCache.mutex', function() {
     describe('PettyCache.mutex.lock (callbacks)', function() {
-        it('PettyCache.mutex.lock should lock for 1 second by default', done => {
+        it('PettyCache.mutex.lock should lock for 1 second by default', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.mutex.lock(key, err => {
@@ -1228,16 +1262,16 @@ describe('PettyCache.mutex', function() {
                     setTimeout(() => {
                         pettyCache.mutex.lock(key, err => {
                             assert.ifError(err);
-                            done();
+                            resolve();
                         });
                     }, 1001);
                 });
             });
         });
+});
 
-        it('PettyCache.mutex.lock should lock for 2 seconds when ttl parameter is specified', function(done) {
-            this.timeout(3000);
-
+        it('PettyCache.mutex.lock should lock for 2 seconds when ttl parameter is specified', { timeout: 3000 }, async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.mutex.lock(key, { ttl: 2000 }, err => {
@@ -1255,15 +1289,16 @@ describe('PettyCache.mutex', function() {
                     setTimeout(() => {
                         pettyCache.mutex.lock(key, err => {
                             assert.ifError(err);
-                            done();
+                            resolve();
                         });
                     }, 2001);
                 });
             });
         });
+});
 
-        it('PettyCache.mutex.lock should acquire a lock after retries', function(done) {
-            this.timeout(3000);
+        it('PettyCache.mutex.lock should acquire a lock after retries', { timeout: 3000 }, async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.mutex.lock(key, { ttl: 2000 } , err => {
@@ -1274,11 +1309,12 @@ describe('PettyCache.mutex', function() {
 
                     pettyCache.mutex.lock(key, { retry: { interval: 500, times: 10 } }, err => {
                         assert.ifError(err);
-                        done();
+                        resolve();
                     });
                 });
             });
         });
+});
     });
 
     describe('PettyCache.mutex.lock (promises)', function() {
@@ -1300,9 +1336,7 @@ describe('PettyCache.mutex', function() {
             await pettyCache.mutex.lock(key);
         });
 
-        it('PettyCache.mutex.lock should lock for 2 seconds when ttl parameter is specified', async function() {
-            this.timeout(4000);
-
+        it('PettyCache.mutex.lock should lock for 2 seconds when ttl parameter is specified', { timeout: 4000 }, async function() {
             const key = Math.random().toString();
 
             await pettyCache.mutex.lock(key, { ttl: 2000 });
@@ -1330,8 +1364,7 @@ describe('PettyCache.mutex', function() {
             await pettyCache.mutex.lock(key);
         });
 
-        it('PettyCache.mutex.lock should acquire a lock after retries', async function() {
-            this.timeout(4000);
+        it('PettyCache.mutex.lock should acquire a lock after retries', { timeout: 4000 }, async function() {
             const key = Math.random().toString();
 
             await pettyCache.mutex.lock(key, { ttl: 2000 });
@@ -1349,7 +1382,8 @@ describe('PettyCache.mutex', function() {
     });
 
     describe('PettyCache.mutex.unlock (callbacks)', function() {
-        it('PettyCache.mutex.unlock should unlock', function(done) {
+        it('PettyCache.mutex.unlock should unlock', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.mutex.lock(key, { ttl: 10000 }, err => {
@@ -1361,23 +1395,26 @@ describe('PettyCache.mutex', function() {
                     pettyCache.mutex.unlock(key, () => {
                         pettyCache.mutex.lock(key, err => {
                             assert.ifError(err);
-                            done();
+                            resolve();
                         });
                     });
                 });
             });
         });
+});
 
-        it('PettyCache.mutex.unlock should work without a callback', function(done) {
+        it('PettyCache.mutex.unlock should work without a callback', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.mutex.lock(key, { ttl: 10000 }, err => {
                 assert.ifError(err);
 
                 pettyCache.mutex.unlock(key);
-                done();
+                resolve();
             });
         });
+});
     });
 
     describe('PettyCache.mutex.unlock (promises)', function() {
@@ -1403,45 +1440,50 @@ describe('PettyCache.mutex', function() {
 describe('PettyCache.patch', function() {
     const key = Math.random().toString();
 
-    before(function(done) {
-        pettyCache.set(key, { a: 1, b: 2, c: 3 }, done);
-    });
+    before(function() { return new Promise(function(resolve) { pettyCache.set(key, { a: 1, b: 2, c: 3 }, resolve); }); });
 
-    it('PettyCache.patch should fail if the key does not exist', function(done) {
+    it('PettyCache.patch should fail if the key does not exist', async function() {
+ await new Promise(function(resolve) {
         pettyCache.patch('xyz', { b: 3 }, function(err) {
             assert(err, 'No error provided');
-            done();
+            resolve();
         });
     });
+});
 
-    it('PettyCache.patch should update the values of given object keys', function(done) {
+    it('PettyCache.patch should update the values of given object keys', async function() {
+ await new Promise(function(resolve) {
         pettyCache.patch(key, { b: 4, c: 5 }, function(err) {
             assert(!err, 'Error: ' + err);
 
             pettyCache.get(key, function(err, data) {
                 assert(!err, 'Error: ' + err);
                 assert.deepEqual(data, { a: 1, b: 4, c: 5 });
-                done();
+                resolve();
             });
         });
     });
+});
 
-    it('PettyCache.patch should update the values of given object keys with options', function(done) {
+    it('PettyCache.patch should update the values of given object keys with options', async function() {
+ await new Promise(function(resolve) {
         pettyCache.patch(key, { b: 5, c: 6 }, { ttl: 10000 }, function(err) {
             assert(!err, 'Error: ' + err);
 
             pettyCache.get(key, function(err, data) {
                 assert(!err, 'Error: ' + err);
                 assert.deepEqual(data, { a: 1, b: 5, c: 6 });
-                done();
+                resolve();
             });
         });
     });
 });
+});
 
 describe('PettyCache.semaphore', function() {
     describe('PettyCache.semaphore.acquireLock', function() {
-        it('should aquire a lock', function(done) {
+        it('should aquire a lock', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 10 }, function(err) {
@@ -1454,13 +1496,15 @@ describe('PettyCache.semaphore', function() {
                     pettyCache.semaphore.acquireLock(key, function(err, index) {
                         assert.ifError(err);
                         assert.equal(index, 1);
-                        done();
+                        resolve();
                     });
                 });
             });
         });
+});
 
-        it('should not aquire a lock', function(done) {
+        it('should not aquire a lock', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, function(err) {
@@ -1472,13 +1516,15 @@ describe('PettyCache.semaphore', function() {
 
                     pettyCache.semaphore.acquireLock(key, function(err) {
                         assert(err);
-                        done();
+                        resolve();
                     });
                 });
             });
         });
+});
 
-        it('should aquire a lock after ttl', function(done) {
+        it('should aquire a lock after ttl', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, function(err) {
@@ -1495,17 +1541,17 @@ describe('PettyCache.semaphore', function() {
                             pettyCache.semaphore.acquireLock(key, function(err, index) {
                                 assert.ifError(err);
                                 assert.equal(index, 0);
-                                done();
+                                resolve();
                             });
                         }, 1001);
                     });
                 });
             });
         });
+});
 
-        it('should aquire a lock with specified options', function(done) {
-            this.timeout(5000);
-
+        it('should aquire a lock with specified options', { timeout: 5000 }, async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 10 }, function(err) {
@@ -1518,25 +1564,29 @@ describe('PettyCache.semaphore', function() {
                     pettyCache.semaphore.acquireLock(key, { retry: { interval: 500, times: 10 }, ttl: 500 }, function(err, index) {
                         assert.ifError(err);
                         assert.equal(index, 1);
-                        done();
+                        resolve();
                     });
                 }, 1000);
             });
         });
+});
 
-        it('should fail if the semaphore does not exist', function(done) {
+        it('should fail if the semaphore does not exist', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.acquireLock(key, 0, function(err) {
                 assert(err);
                 assert.strictEqual(err.message, `Semaphore ${key} doesn't exist.`);
-                done();
+                resolve();
             });
         });
+});
     });
 
     describe('PettyCache.semaphore.consumeLock', function() {
-        it('should consume a lock', function(done) {
+        it('should consume a lock', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
@@ -1558,7 +1608,7 @@ describe('PettyCache.semaphore', function() {
 
                                 pettyCache.semaphore.acquireLock(key, function(err) {
                                     assert(err);
-                                    done();
+                                    resolve();
                                 });
                             });
                         });
@@ -1566,8 +1616,10 @@ describe('PettyCache.semaphore', function() {
                 });
             });
         });
+});
 
-        it('should ensure at least one lock is not consumed', function(done) {
+        it('should ensure at least one lock is not consumed', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
@@ -1593,7 +1645,7 @@ describe('PettyCache.semaphore', function() {
                                     pettyCache.semaphore.acquireLock(key, function(err) {
                                         assert.ifError(err);
                                         assert.equal(index, 1);
-                                        done();
+                                        resolve();
                                     });
                                 });
                             });
@@ -1602,18 +1654,22 @@ describe('PettyCache.semaphore', function() {
                 });
             });
         });
+});
 
-        it('should fail if the semaphore does not exist', function(done) {
+        it('should fail if the semaphore does not exist', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.consumeLock(key, 0, function(err) {
                 assert(err);
                 assert.strictEqual(err.message, `Semaphore ${key} doesn't exist.`);
-                done();
+                resolve();
             });
         });
+});
 
-        it('should fail if index is larger than semaphore', function(done) {
+        it('should fail if index is larger than semaphore', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
@@ -1626,13 +1682,15 @@ describe('PettyCache.semaphore', function() {
                     pettyCache.semaphore.consumeLock(key, 10, function(err) {
                         assert(err);
                         assert.strictEqual(err.message, `Index 10 for semaphore ${key} is invalid.`);
-                        done();
+                        resolve();
                     });
                 });
             });
         });
+});
 
-        it('callback is optional', function(done) {
+        it('callback is optional', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
@@ -1653,17 +1711,19 @@ describe('PettyCache.semaphore', function() {
 
                             pettyCache.semaphore.acquireLock(key, function(err) {
                                 assert(err);
-                                done();
+                                resolve();
                             });
                         });
                     });
                 });
             });
         });
+});
     });
 
     describe('PettyCache.semaphore.expand', function() {
-        it('should increase the size of a semaphore pool', function(done) {
+        it('should increase the size of a semaphore pool', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err, pool) {
@@ -1676,13 +1736,15 @@ describe('PettyCache.semaphore', function() {
                     pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err, pool) {
                         assert.ifError(err);
                         assert.strictEqual(pool.length, 3);
-                        done();
+                        resolve();
                     });
                 });
             });
         });
+});
 
-        it('should refuse to shrink a pool', function(done) {
+        it('should refuse to shrink a pool', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err, pool) {
@@ -1692,12 +1754,14 @@ describe('PettyCache.semaphore', function() {
                 pettyCache.semaphore.expand(key, 1, function(err) {
                     assert(err);
                     assert.strictEqual(err.message, 'Cannot shrink pool, size is 2 and you requested a size of 1.');
-                    done();
+                    resolve();
                 });
             });
         });
+});
 
-        it('should succeed if pool size is already equal to the specified size', function(done) {
+        it('should succeed if pool size is already equal to the specified size', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err, pool) {
@@ -1710,13 +1774,15 @@ describe('PettyCache.semaphore', function() {
                     pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err, pool) {
                         assert.ifError(err);
                         assert.strictEqual(pool.length, 2);
-                        done();
+                        resolve();
                     });
                 });
             });
         });
+});
 
-        it('callback is optional', function(done) {
+        it('callback is optional', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err, pool) {
@@ -1728,24 +1794,28 @@ describe('PettyCache.semaphore', function() {
                 pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err, pool) {
                     assert.ifError(err);
                     assert.strictEqual(pool.length, 3);
-                    done();
+                    resolve();
                 });
             });
         });
+});
 
-        it('should fail if the semaphore does not exist', function(done) {
+        it('should fail if the semaphore does not exist', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.expand(key, 10, function(err) {
                 assert(err);
                 assert.strictEqual(err.message, `Semaphore ${key} doesn't exist.`);
-                done();
+                resolve();
             });
         });
+});
     });
 
     describe('PettyCache.semaphore.releaseLock', function() {
-        it('should release a lock', function(done) {
+        it('should release a lock', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, function(err) {
@@ -1764,15 +1834,17 @@ describe('PettyCache.semaphore', function() {
                             pettyCache.semaphore.acquireLock(key, function(err, index) {
                                 assert.ifError(err);
                                 assert.equal(index, 0);
-                                done();
+                                resolve();
                             });
                         });
                     });
                 });
             });
         });
+});
 
-        it('should fail to release a lock outside of the semaphore size', function(done) {
+        it('should fail to release a lock outside of the semaphore size', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, function(err) {
@@ -1785,13 +1857,15 @@ describe('PettyCache.semaphore', function() {
                     pettyCache.semaphore.releaseLock(key, 10, function(err) {
                         assert(err);
                         assert.strictEqual(err.message, `Index 10 for semaphore ${key} is invalid.`);
-                        done();
+                        resolve();
                     });
                 });
             });
         });
+});
 
-        it('callback is optional', function(done) {
+        it('callback is optional', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, function(err) {
@@ -1809,26 +1883,30 @@ describe('PettyCache.semaphore', function() {
                         pettyCache.semaphore.acquireLock(key, function(err, index) {
                             assert.ifError(err);
                             assert.equal(index, 0);
-                            done();
+                            resolve();
                         });
                     });
                 });
             });
         });
+});
 
-        it('should fail if the semaphore does not exist', function(done) {
+        it('should fail if the semaphore does not exist', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.releaseLock(key, 10, function(err) {
                 assert(err);
                 assert.strictEqual(err.message, `Semaphore ${key} doesn't exist.`);
-                done();
+                resolve();
             });
         });
+});
     });
 
     describe('PettyCache.semaphore.reset', function() {
-        it('should reset all locks', function(done) {
+        it('should reset all locks', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
@@ -1851,7 +1929,7 @@ describe('PettyCache.semaphore', function() {
                                 pettyCache.semaphore.acquireLock(key, function(err, index) {
                                     assert.ifError(err);
                                     assert.equal(index, 0);
-                                    done();
+                                    resolve();
                                 });
                             });
                         });
@@ -1859,8 +1937,10 @@ describe('PettyCache.semaphore', function() {
                 });
             });
         });
+});
 
-        it('callback is optional', function(done) {
+        it('callback is optional', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, function(err) {
@@ -1882,27 +1962,31 @@ describe('PettyCache.semaphore', function() {
                             pettyCache.semaphore.acquireLock(key, function(err, index) {
                                 assert.ifError(err);
                                 assert.equal(index, 0);
-                                done();
+                                resolve();
                             });
                         });
                     });
                 });
             });
         });
+});
 
-        it('should fail if the semaphore does not exist', function(done) {
+        it('should fail if the semaphore does not exist', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.reset(key, function(err) {
                 assert(err);
                 assert.strictEqual(err.message, `Semaphore ${key} doesn't exist.`);
-                done();
+                resolve();
             });
         });
+});
     });
 
     describe('PettyCache.semaphore.retrieveOrCreate', function() {
-        it('should create a new semaphore', function(done) {
+        it('should create a new semaphore', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 100 }, function(err, semaphore) {
@@ -1916,12 +2000,14 @@ describe('PettyCache.semaphore', function() {
                     assert(semaphore);
                     assert.equal(semaphore.length, 100);
                     assert(semaphore.every(s => s.status === 'available'));
-                    done();
+                    resolve();
                 });
             });
         });
+});
 
-        it('should have a min size of 1', function(done) {
+        it('should have a min size of 1', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: 0 }, function(err, semaphore) {
@@ -1935,12 +2021,14 @@ describe('PettyCache.semaphore', function() {
                     assert(semaphore);
                     assert.equal(semaphore.length, 1);
                     assert(semaphore.every(s => s.status === 'available'));
-                    done();
+                    resolve();
                 });
             });
         });
+});
 
-        it('should allow options.size to provide a function', function(done) {
+        it('should allow options.size to provide a function', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key, { size: (callback) => callback(null, 1 + 1) }, function(err, semaphore) {
@@ -1954,12 +2042,14 @@ describe('PettyCache.semaphore', function() {
                     assert(semaphore);
                     assert.equal(semaphore.length, 2);
                     assert(semaphore.every(s => s.status === 'available'));
-                    done();
+                    resolve();
                 });
             });
         });
+});
 
-        it('callback is optional', function(done) {
+        it('callback is optional', async function() {
+ await new Promise(function(resolve) {
             const key = Math.random().toString();
 
             pettyCache.semaphore.retrieveOrCreate(key);
@@ -1969,16 +2059,16 @@ describe('PettyCache.semaphore', function() {
                 assert(semaphore);
                 assert.equal(semaphore.length, 1);
                 assert(semaphore.every(s => s.status === 'available'));
-                done();
+                resolve();
             });
         });
+});
     });
 });
 
 describe('PettyCache.set', function() {
-    it('PettyCache.set should set a value', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.set should set a value', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', function() {
@@ -1989,21 +2079,23 @@ describe('PettyCache.set', function() {
                 setTimeout(function() {
                     pettyCache.get(key, function(err, value) {
                         assert.equal(value, 'hello world');
-                        done();
+                        resolve();
                     });
                 }, 6000);
             });
         });
     });
+});
 
-    it('PettyCache.set should work without a callback', function(done) {
+    it('PettyCache.set should work without a callback', async function() {
+ await new Promise(function(resolve) {
         pettyCache.set(Math.random().toString(), 'hello world');
-        done();
+        resolve();
     });
+});
 
-    it('PettyCache.set should set a value with the specified TTL option', function(done) {
-        this.timeout(7000);
-
+    it('PettyCache.set should set a value with the specified TTL option', { timeout: 7000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', { ttl: 6000 },function() {
@@ -2014,16 +2106,16 @@ describe('PettyCache.set', function() {
                 setTimeout(function() {
                     pettyCache.get(key, function(err, value) {
                         assert.equal(value, null);
-                        done();
+                        resolve();
                     });
                 }, 6001);
             });
         });
     });
+});
 
-    it('PettyCache.set should set a value with the specified TTL option using max and min', function(done) {
-        this.timeout(10000);
-
+    it('PettyCache.set should set a value with the specified TTL option using max and min', { timeout: 10000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', { ttl: { max: 7000, min: 6000 } },function() {
@@ -2039,7 +2131,7 @@ describe('PettyCache.set', function() {
                         setTimeout(function() {
                             pettyCache.get(key, function(err, value) {
                                 assert.strictEqual(value, null);
-                                done();
+                                resolve();
                             });
                         }, 6001);
                     });
@@ -2047,36 +2139,36 @@ describe('PettyCache.set', function() {
             });
         });
     });
+});
 
-    it('PettyCache.set should set a value with the specified TTL option using min only', function(done) {
-        this.timeout(10000);
-
+    it('PettyCache.set should set a value with the specified TTL option using min only', { timeout: 10000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', { ttl: { min: 6000 } },function() {
             pettyCache.get(key, function(err, value) {
                 assert.strictEqual(value, 'hello world');
-                done();
+                resolve();
             });
         });
     });
+});
 
-    it('PettyCache.set should set a value with the specified TTL option using max only', function(done) {
-        this.timeout(10000);
-
+    it('PettyCache.set should set a value with the specified TTL option using max only', { timeout: 10000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, 'hello world', { ttl: { max: 10000 } },function() {
             pettyCache.get(key, function(err, value) {
                 assert.strictEqual(value, 'hello world');
-                done();
+                resolve();
             });
         });
     });
+});
 
-    it('PettyCache.set(key, \'\')', function(done) {
-        this.timeout(11000);
-
+    it('PettyCache.set(key, \'\')', { timeout: 11000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, '', { ttl: 7000 }, function(err) {
@@ -2097,7 +2189,7 @@ describe('PettyCache.set', function() {
                             pettyCache.get(key, function(err, value) {
                                 assert.ifError(err);
                                 assert.strictEqual(value, null);
-                                done();
+                                resolve();
                             });
                         }, 5001);
                     });
@@ -2105,10 +2197,10 @@ describe('PettyCache.set', function() {
             });
         });
     });
+});
 
-    it('PettyCache.set(key, 0)', function(done) {
-        this.timeout(11000);
-
+    it('PettyCache.set(key, 0)', { timeout: 11000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, 0, { ttl: 7000 }, function(err) {
@@ -2129,7 +2221,7 @@ describe('PettyCache.set', function() {
                             pettyCache.get(key, function(err, value) {
                                 assert.ifError(err);
                                 assert.strictEqual(value, null);
-                                done();
+                                resolve();
                             });
                         }, 5001);
                     });
@@ -2137,10 +2229,10 @@ describe('PettyCache.set', function() {
             });
         });
     });
+});
 
-    it('PettyCache.set(key, false)', function(done) {
-        this.timeout(11000);
-
+    it('PettyCache.set(key, false)', { timeout: 11000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, false, { ttl: 7000 }, function(err) {
@@ -2161,7 +2253,7 @@ describe('PettyCache.set', function() {
                             pettyCache.get(key, function(err, value) {
                                 assert.ifError(err);
                                 assert.strictEqual(value, null);
-                                done();
+                                resolve();
                             });
                         }, 5001);
                     });
@@ -2169,10 +2261,10 @@ describe('PettyCache.set', function() {
             });
         });
     });
+});
 
-    it('PettyCache.set(key, NaN)', function(done) {
-        this.timeout(11000);
-
+    it('PettyCache.set(key, NaN)', { timeout: 11000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, NaN, { ttl: 7000 }, function(err) {
@@ -2193,7 +2285,7 @@ describe('PettyCache.set', function() {
                             pettyCache.get(key, function(err, value) {
                                 assert.ifError(err);
                                 assert.strictEqual(value, null);
-                                done();
+                                resolve();
                             });
                         }, 5001);
                     });
@@ -2201,10 +2293,10 @@ describe('PettyCache.set', function() {
             });
         });
     });
+});
 
-    it('PettyCache.set(key, null)', function(done) {
-        this.timeout(11000);
-
+    it('PettyCache.set(key, null)', { timeout: 11000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, null, { ttl: 7000 }, function(err) {
@@ -2225,7 +2317,7 @@ describe('PettyCache.set', function() {
                             pettyCache.get(key, function(err, value) {
                                 assert.ifError(err);
                                 assert.strictEqual(value, null);
-                                done();
+                                resolve();
                             });
                         }, 5001);
                     });
@@ -2233,10 +2325,10 @@ describe('PettyCache.set', function() {
             });
         });
     });
+});
 
-    it('PettyCache.set(key, undefined)', function(done) {
-        this.timeout(11000);
-
+    it('PettyCache.set(key, undefined)', { timeout: 11000 }, async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         pettyCache.set(key, undefined, { ttl: 7000 }, function(err) {
@@ -2257,7 +2349,7 @@ describe('PettyCache.set', function() {
                             pettyCache.get(key, function(err, value) {
                                 assert.ifError(err);
                                 assert.strictEqual(value, null);
-                                done();
+                                resolve();
                             });
                         }, 5001);
                     });
@@ -2266,9 +2358,11 @@ describe('PettyCache.set', function() {
         });
     });
 });
+});
 
 describe('redisClient', function() {
-    it('redisClient.mget(falsy keys)', function(done) {
+    it('redisClient.mget(falsy keys)', async function() {
+ await new Promise(function(resolve) {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
         const key3 = Math.random().toString();
@@ -2311,12 +2405,14 @@ describe('redisClient', function() {
                 assert.strictEqual(data[5], '"__undefined"');
                 assert.strictEqual(PettyCache.parse(data[5]), undefined);
                 assert.strictEqual(data[6], null);
-                done();
+                resolve();
             });
         });
     });
+});
 
-    it('redisClient.psetex(key, \'\')', function(done) {
+    it('redisClient.psetex(key, \'\')', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(''), function(err) {
@@ -2332,14 +2428,16 @@ describe('redisClient', function() {
                     redisClient.get(key, function(err, data) {
                         assert.ifError(err);
                         assert.strictEqual(data, null);
-                        done();
+                        resolve();
                     });
                 }, 1001);
             });
         });
     });
+});
 
-    it('redisClient.psetex(key, 0)', function(done) {
+    it('redisClient.psetex(key, 0)', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(0), function(err) {
@@ -2355,14 +2453,16 @@ describe('redisClient', function() {
                     redisClient.get(key, function(err, data) {
                         assert.ifError(err);
                         assert.strictEqual(data, null);
-                        done();
+                        resolve();
                     });
                 }, 1001);
             });
         });
     });
+});
 
-    it('redisClient.psetex(key, false)', function(done) {
+    it('redisClient.psetex(key, false)', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(false), function(err) {
@@ -2378,14 +2478,16 @@ describe('redisClient', function() {
                     redisClient.get(key, function(err, data) {
                         assert.ifError(err);
                         assert.strictEqual(data, null);
-                        done();
+                        resolve();
                     });
                 }, 1001);
             });
         });
     });
+});
 
-    it('redisClient.psetex(key, NaN)', function(done) {
+    it('redisClient.psetex(key, NaN)', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(NaN), function(err) {
@@ -2401,14 +2503,16 @@ describe('redisClient', function() {
                     redisClient.get(key, function(err, data) {
                         assert.ifError(err);
                         assert.strictEqual(data, null);
-                        done();
+                        resolve();
                     });
                 }, 1001);
             });
         });
     });
+});
 
-    it('redisClient.psetex(key, null)', function(done) {
+    it('redisClient.psetex(key, null)', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(null), function(err) {
@@ -2424,14 +2528,16 @@ describe('redisClient', function() {
                     redisClient.get(key, function(err, data) {
                         assert.ifError(err);
                         assert.strictEqual(data, null);
-                        done();
+                        resolve();
                     });
                 }, 1001);
             });
         });
     });
+});
 
-    it('redisClient.psetex(key, undefined)', function(done) {
+    it('redisClient.psetex(key, undefined)', async function() {
+ await new Promise(function(resolve) {
         const key = Math.random().toString();
 
         redisClient.psetex(key, 1000, PettyCache.stringify(undefined), function(err) {
@@ -2447,18 +2553,20 @@ describe('redisClient', function() {
                     redisClient.get(key, function(err, data) {
                         assert.ifError(err);
                         assert.strictEqual(data, null);
-                        done();
+                        resolve();
                     });
                 }, 1001);
             });
         });
     });
 });
+});
 
 describe('Benchmark', function() {
     const emojis = require('./emojis.json');
 
-    it('PettyCache should be faster than node-redis', function(done) {
+    it('PettyCache should be faster than node-redis', async function() {
+ await new Promise(function(resolve) {
         let pettyCacheEnd;
         const pettyCacheKey = Math.random().toString();
         let pettyCacheStart;
@@ -2497,10 +2605,11 @@ describe('Benchmark', function() {
                         pettyCacheEnd = Date.now();
                         assert.ifError(err);
                         assert(pettyCacheEnd - pettyCacheStart < redisEnd - redisStart);
-                        done();
+                        resolve();
                     });
                 });
             });
         });
     });
+});
 });
