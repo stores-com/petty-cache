@@ -145,6 +145,24 @@ pettyCache.set({ key1: 'one', key2: 2, key3: 'three' }, function(err) {
 }
 ```
 
+### pettyCache.del(key, [callback])
+
+Deletes a value from both the in-memory cache and Redis. Supports both callbacks and promises.
+
+**Example**
+
+```javascript
+pettyCache.del('key', function(err) {
+    if (err) {
+        // Handle redis error
+    }
+});
+```
+
+```javascript
+await pettyCache.del('key');
+```
+
 ### pettyCache.fetch(key, cacheMissFunction, [options,] callback)
 
 Attempts to retrieve the value from cache at the specified key. If it doesn't exist, it executes the specified cacheMissFunction that takes two parameters: an error and a value. `cacheMissFunction` should retrieve the expected value for the key from another source and pass it to the given callback. Either way, the resulting error or value is passed to `callback`.
