@@ -222,9 +222,9 @@ pettyCache.fetchAndRefresh('key', function(callback) {
 }
 ```
 
-### pettyCache.get(key, callback)
+### pettyCache.get(key, [callback])
 
-Attempts to retrieve the value from cache at the specified key. Returns `null` if the key doesn't exist.
+Attempts to retrieve the value from cache at the specified key. Returns `null` if the key doesn't exist. Supports both callbacks and promises.
 
 **Example**
 
@@ -235,20 +235,28 @@ pettyCache.get('key', function(err, value) {
 });
 ```
 
-### pettyCache.patch(key, value, [options,] callback)
+```javascript
+const value = await pettyCache.get('key');
+```
 
-Updates an object at the given key with the property values provided. Sends an error to the callback if the key does not exist.
+### pettyCache.patch(key, value, [options, [callback]])
+
+Updates an object at the given key with the property values provided. Sends an error to the callback if the key does not exist. Supports both callbacks and promises.
 
 **Example**
 
 ```javascript
-pettyCache.patch('key', { a: 1 }, function(callback) {
+pettyCache.patch('key', { a: 1 }, function(err) {
     if (err) {
         // Handle redis or key not found error
     }
 
     // The object stored at 'key' now has a property 'a' with the value 1. Its other values are intact.
 });
+```
+
+```javascript
+await pettyCache.patch('key', { a: 1 });
 ```
 
 **Options**
@@ -269,9 +277,9 @@ pettyCache.patch('key', { a: 1 }, function(callback) {
 }
 ```
 
-### pettyCache.set(key, value, [options,] callback)
+### pettyCache.set(key, value, [options, [callback]])
 
-Unconditionally sets a value for a given key.
+Unconditionally sets a value for a given key. Supports both callbacks and promises.
 
 **Example**
 
@@ -281,6 +289,10 @@ pettyCache.set('key', { a: 'b' }, function(err) {
         // Handle redis error
     }
 });
+```
+
+```javascript
+await pettyCache.set('key', { a: 'b' });
 ```
 
 **Options**

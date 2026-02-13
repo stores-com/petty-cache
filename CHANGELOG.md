@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-02-12
+### Changed
+- Added the ability for `pettyCache.get`, `pettyCache.set`, and `pettyCache.patch` functions to support callbacks and promises.
+
 ## [3.5.0] - 2025-05-01
 ### Changed
 - Added the ability for `pettyCache.del` functions to support callbacks and promises.
