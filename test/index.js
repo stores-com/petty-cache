@@ -2672,6 +2672,188 @@ test('PettyCache.semaphore.reset should return error if Redis GET fails', (t, do
     });
 });
 
+test('PettyCache.semaphore.retrieveOrCreate should return error if Redis SET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalSet = stubClient.set.bind(stubClient);
+
+    stubClient.set = (...args) => {
+        if (args.includes('NX')) {
+            return originalSet(...args);
+        }
+
+        args[args.length - 1](new Error('Redis SET error'));
+    };
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.semaphore.retrieveOrCreate(Math.random().toString(), (err) => {
+        stubClient.set = originalSet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis SET error');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.acquireLock should return error if Redis SET fails', (t, done) => {
+    const key = Math.random().toString();
+
+    pettyCache.semaphore.retrieveOrCreate(key, (err) => {
+        assert.ifError(err);
+
+        const stubClient = redis.createClient();
+        const originalSet = stubClient.set.bind(stubClient);
+
+        stubClient.set = (...args) => {
+            if (args.includes('NX')) {
+                return originalSet(...args);
+            }
+
+            args[args.length - 1](new Error('Redis SET error'));
+        };
+
+        const stubCache = new PettyCache(stubClient);
+
+        stubCache.semaphore.acquireLock(key, (err) => {
+            stubClient.set = originalSet;
+
+            assert(err);
+            assert.strictEqual(err.message, 'Redis SET error');
+
+            done();
+        });
+    });
+});
+
+test('PettyCache.semaphore.consumeLock should return error if Redis SET fails', (t, done) => {
+    const key = Math.random().toString();
+
+    pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, (err) => {
+        assert.ifError(err);
+
+        pettyCache.semaphore.acquireLock(key, (err, index) => {
+            assert.ifError(err);
+
+            const stubClient = redis.createClient();
+            const originalSet = stubClient.set.bind(stubClient);
+
+            stubClient.set = (...args) => {
+                if (args.includes('NX')) {
+                    return originalSet(...args);
+                }
+
+                args[args.length - 1](new Error('Redis SET error'));
+            };
+
+            const stubCache = new PettyCache(stubClient);
+
+            stubCache.semaphore.consumeLock(key, index, (err) => {
+                stubClient.set = originalSet;
+
+                assert(err);
+                assert.strictEqual(err.message, 'Redis SET error');
+
+                done();
+            });
+        });
+    });
+});
+
+test('PettyCache.semaphore.expand should return error if Redis SET fails', (t, done) => {
+    const key = Math.random().toString();
+
+    pettyCache.semaphore.retrieveOrCreate(key, { size: 2 }, (err) => {
+        assert.ifError(err);
+
+        const stubClient = redis.createClient();
+        const originalSet = stubClient.set.bind(stubClient);
+
+        stubClient.set = (...args) => {
+            if (args.includes('NX')) {
+                return originalSet(...args);
+            }
+
+            args[args.length - 1](new Error('Redis SET error'));
+        };
+
+        const stubCache = new PettyCache(stubClient);
+
+        stubCache.semaphore.expand(key, 5, (err) => {
+            stubClient.set = originalSet;
+
+            assert(err);
+            assert.strictEqual(err.message, 'Redis SET error');
+
+            done();
+        });
+    });
+});
+
+test('PettyCache.semaphore.releaseLock should return error if Redis SET fails', (t, done) => {
+    const key = Math.random().toString();
+
+    pettyCache.semaphore.retrieveOrCreate(key, (err) => {
+        assert.ifError(err);
+
+        pettyCache.semaphore.acquireLock(key, (err, index) => {
+            assert.ifError(err);
+
+            const stubClient = redis.createClient();
+            const originalSet = stubClient.set.bind(stubClient);
+
+            stubClient.set = (...args) => {
+                if (args.includes('NX')) {
+                    return originalSet(...args);
+                }
+
+                args[args.length - 1](new Error('Redis SET error'));
+            };
+
+            const stubCache = new PettyCache(stubClient);
+
+            stubCache.semaphore.releaseLock(key, index, (err) => {
+                stubClient.set = originalSet;
+
+                assert(err);
+                assert.strictEqual(err.message, 'Redis SET error');
+
+                done();
+            });
+        });
+    });
+});
+
+test('PettyCache.semaphore.reset should return error if Redis SET fails', (t, done) => {
+    const key = Math.random().toString();
+
+    pettyCache.semaphore.retrieveOrCreate(key, (err) => {
+        assert.ifError(err);
+
+        const stubClient = redis.createClient();
+        const originalSet = stubClient.set.bind(stubClient);
+
+        stubClient.set = (...args) => {
+            if (args.includes('NX')) {
+                return originalSet(...args);
+            }
+
+            args[args.length - 1](new Error('Redis SET error'));
+        };
+
+        const stubCache = new PettyCache(stubClient);
+
+        stubCache.semaphore.reset(key, (err) => {
+            stubClient.set = originalSet;
+
+            assert(err);
+            assert.strictEqual(err.message, 'Redis SET error');
+
+            done();
+        });
+    });
+});
+
 test('PettyCache.fetch should lock around Redis', (t, done) => {
     redisClient.info('commandstats', (err, info) => {
         const lineBefore = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
