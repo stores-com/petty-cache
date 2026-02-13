@@ -1,4 +1,4 @@
 .eslint*
 .github
-.travis.yml
+CLAUDE.md
 test
