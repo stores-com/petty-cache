@@ -915,6 +915,17 @@ test('petty-cache', { concurrency: true }, async (t) => {
             });
         });
 
+        t.test('PettyCache.fetch should return error if async func throws error', (t, done) => {
+            pettyCache.fetch(Math.random().toString(), async () => {
+                throw new Error('PettyCache.fetch should return error if async func throws error');
+            }, (err, data) => {
+                assert(err);
+                assert.strictEqual(err.message, 'PettyCache.fetch should return error if async func throws error');
+                assert(!data);
+                done();
+            });
+        });
+
         t.test('PettyCache.fetch should support async func with callback', (t, done) => {
             const key = Math.random().toString();
 
@@ -2384,6 +2395,100 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 });
             });
         });
+    });
+});
+
+test('PettyCache.fetch should return error if Redis GET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+
+    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.fetch(Math.random().toString(), (callback) => {
+        callback(null, 'value');
+    }, (err) => {
+        stubClient.get = originalGet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis GET error');
+
+        done();
+    });
+});
+
+test('PettyCache.get should return error if Redis GET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+
+    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.get(Math.random().toString(), (err) => {
+        stubClient.get = originalGet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis GET error');
+
+        done();
+    });
+});
+
+test('PettyCache.bulkFetch should return error if Redis MGET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalMget = stubClient.mget.bind(stubClient);
+
+    stubClient.mget = (keys, callback) => callback(new Error('Redis MGET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.bulkFetch([Math.random().toString()], (keys, callback) => {
+        callback(null, {});
+    }, (err) => {
+        stubClient.mget = originalMget;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis MGET error');
+
+        done();
+    });
+});
+
+test('PettyCache.bulkGet should return error if Redis MGET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalMget = stubClient.mget.bind(stubClient);
+
+    stubClient.mget = (keys, callback) => callback(new Error('Redis MGET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.bulkGet([Math.random().toString()], (err) => {
+        stubClient.mget = originalMget;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis MGET error');
+
+        done();
+    });
+});
+
+test('PettyCache.mutex.lock should return error if Redis SET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalSet = stubClient.set.bind(stubClient);
+
+    stubClient.set = (...args) => args[args.length - 1](new Error('Redis SET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.mutex.lock(Math.random().toString(), (err) => {
+        stubClient.set = originalSet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis SET error');
+
+        done();
     });
 });
 
