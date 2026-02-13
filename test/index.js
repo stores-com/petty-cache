@@ -2947,6 +2947,118 @@ test('PettyCache.semaphore.retrieveOrCreate should return error if size function
     });
 });
 
+test('PettyCache.fetch should return error if inner Redis GET fails (double-checked lock)', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+    let getCallCount = 0;
+
+    stubClient.get = (...args) => {
+        getCallCount++;
+
+        if (getCallCount === 1) {
+            const callback = args[args.length - 1];
+            return callback(null, null);
+        }
+
+        stubClient.get = originalGet;
+        const callback = args[args.length - 1];
+        callback(new Error('Redis GET error'));
+    };
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.fetch(Math.random().toString(), (callback) => {
+        callback(null, 'value');
+    }, (err) => {
+        stubClient.get = originalGet;
+        assert(err);
+        assert.strictEqual(err.message, 'Redis GET error');
+
+        done();
+    });
+});
+
+test('PettyCache.fetch should return cached value from inner Redis GET (double-checked lock)', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+    let getCallCount = 0;
+
+    stubClient.get = (...args) => {
+        getCallCount++;
+
+        if (getCallCount === 1) {
+            const callback = args[args.length - 1];
+            return callback(null, null);
+        }
+
+        stubClient.get = originalGet;
+        const callback = args[args.length - 1];
+        callback(null, JSON.stringify('cached-value'));
+    };
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.fetch(Math.random().toString(), (callback) => {
+        callback(null, 'should-not-be-used');
+    }, (err, value) => {
+        stubClient.get = originalGet;
+        assert.ifError(err);
+        assert.strictEqual(value, 'cached-value');
+
+        done();
+    });
+});
+
+test('PettyCache.fetch should return cached value from inner memory cache (double-checked lock)', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+    const key = Math.random().toString();
+    let stubCache;
+
+    stubClient.get = (...args) => {
+        stubClient.get = originalGet;
+
+        // Populate memory cache synchronously via set before returning
+        stubCache.set(key, 'cached-value', () => {});
+
+        const callback = args[args.length - 1];
+        callback(null, null);
+    };
+
+    stubCache = new PettyCache(stubClient);
+
+    stubCache.fetch(key, (callback) => {
+        callback(null, 'should-not-be-used');
+    }, (err, value) => {
+        stubClient.get = originalGet;
+        assert.ifError(err);
+        assert.strictEqual(value, 'cached-value');
+
+        done();
+    });
+});
+
+test('PettyCache.get should return cached value from double-checked lock', (t, done) => {
+    const key = Math.random().toString();
+
+    // Put value directly in Redis (not memory cache)
+    redisClient.psetex(key, 10000, JSON.stringify('test-value'), () => {
+        let completed = 0;
+
+        const checkDone = (err, value) => {
+            assert.ifError(err);
+            assert.strictEqual(value, 'test-value');
+            completed++;
+
+            if (completed === 2) done();
+        };
+
+        // Two concurrent gets - second should hit memory cache inside lock
+        pettyCache.get(key, checkDone);
+        pettyCache.get(key, checkDone);
+    });
+});
+
 test('PettyCache.fetch should lock around Redis', (t, done) => {
     redisClient.info('commandstats', (err, info) => {
         const lineBefore = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
