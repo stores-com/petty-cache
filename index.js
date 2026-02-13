@@ -18,7 +18,7 @@ function PettyCache() {
 
     function bulkGetFromRedis(keys, callback) {
         // Try to get values from Redis
-        redisClient.mget(keys, function(err, data) {
+        redisClient.mget(keys, (err, data) => {
             if (err) {
                 return callback(err);
             }
@@ -61,7 +61,7 @@ function PettyCache() {
 
     function getFromRedis(key, callback) {
         // Try to get value from Redis
-        redisClient.get(key, function(err, data) {
+        redisClient.get(key, (err, data) => {
             if (err) {
                 return callback(err);
             }
@@ -103,7 +103,7 @@ function PettyCache() {
     /**
      * @param {Array} keys - An array of keys.
      */
-    this.bulkFetch = function(keys, func, options, callback) {
+    this.bulkFetch = (keys, func, options, callback) => {
         // Options are optional
         if (!callback) {
             callback = options;
@@ -137,7 +137,7 @@ function PettyCache() {
         const _this = this;
 
         // Try to get values from Redis
-        bulkGetFromRedis(_keys, function(err, results) {
+        bulkGetFromRedis(_keys, (err, results) => {
             if (err) {
                 return callback(err);
             }
@@ -161,7 +161,7 @@ function PettyCache() {
             }
 
             // Execute the specified function for remaining keys
-            func(_keys, function(err, data) {
+            func(_keys, (err, data) => {
                 if (err) {
                     return callback(err);
                 }
@@ -176,7 +176,7 @@ function PettyCache() {
     /**
      * @param {Array} keys - An array of keys.
      */
-    this.bulkGet = function(keys, callback) {
+    this.bulkGet = (keys, callback) => {
         // If there aren't any keys, return
         if (!keys.length) {
             return callback(null, {});
@@ -202,7 +202,7 @@ function PettyCache() {
         }
 
         // Try to get values from Redis
-        bulkGetFromRedis(_keys, function(err, results) {
+        bulkGetFromRedis(_keys, (err, results) => {
             if (err) {
                 return callback(err);
             }
@@ -226,7 +226,7 @@ function PettyCache() {
         });
     };
 
-    this.bulkSet = function(values, options, callback) {
+    this.bulkSet = (values, options, callback) => {
         // Options are optional
         if (!callback) {
             callback = options;
@@ -249,15 +249,15 @@ function PettyCache() {
             batch.psetex(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
         });
 
-        batch.exec(function(err) {
+        batch.exec((err) => {
             callback(err);
         });
     };
 
-    this.del = function(key, callback) {
+    this.del = (key, callback) => {
         const executor = () => {
             return new Promise((resolve, reject) => {
-                redisClient.del(key, function(err) {
+                redisClient.del(key, (err) => {
                     if (err) {
                         return reject(err);
                     }
@@ -277,7 +277,7 @@ function PettyCache() {
 
     // Returns data from cache if available;
     // otherwise executes the specified function and places the results in cache before returning the data.
-    this.fetch = function(key, func, options, callback) {
+    this.fetch = (key, func, options, callback) => {
         options = options || {};
 
         if (typeof options === 'function') {
@@ -286,7 +286,7 @@ function PettyCache() {
         }
 
         // Default callback is a noop
-        callback = callback || function() {};
+        callback = callback || (() => {});
 
         // Try to get value from memory cache
         let result = getFromMemoryCache(key);
@@ -299,8 +299,8 @@ function PettyCache() {
         const _this = this;
 
         // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-        lock(`fetch-memory-cache-lock-${key}`, function(releaseMemoryCacheLock) {
-            async.reflect(function(callback) {
+        lock(`fetch-memory-cache-lock-${key}`, (releaseMemoryCacheLock) => {
+            async.reflect((callback) => {
                 // Try to get value from memory cache
                 result = getFromMemoryCache(key);
 
@@ -310,7 +310,7 @@ function PettyCache() {
                 }
 
                 // Try to get value from Redis
-                getFromRedis(key, function(err, result) {
+                getFromRedis(key, (err, result) => {
                     if (err) {
                         return callback(err);
                     }
@@ -322,8 +322,8 @@ function PettyCache() {
                     }
 
                     // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-                    lock(`fetch-redis-lock-${key}`, function(releaseRedisLock) {
-                        async.reflect(function(callback) {
+                    lock(`fetch-redis-lock-${key}`, (releaseRedisLock) => {
+                        async.reflect((callback) => {
                             // Try to get value from memory cache
                             result = getFromMemoryCache(key);
 
@@ -333,7 +333,7 @@ function PettyCache() {
                             }
 
                             // Try to get value from Redis
-                            getFromRedis(key, async function(err, result) {
+                            getFromRedis(key, async (err, result) => {
                                 if (err) {
                                     return callback(err);
                                 }
@@ -350,7 +350,7 @@ function PettyCache() {
                                     try {
                                         const data = await func();
 
-                                        _this.set(key, data, options, function(err) {
+                                        _this.set(key, data, options, (err) => {
                                             callback(err, data);
                                         });
                                     } catch(err) {
@@ -358,18 +358,18 @@ function PettyCache() {
                                     }
                                 } else {
                                     // If the function has arguments, there was a callback provided
-                                    func(function(err, data) {
+                                    func((err, data) => {
                                         if (err) {
                                             return callback(err);
                                         }
 
-                                        _this.set(key, data, options, function(err) {
+                                        _this.set(key, data, options, (err) => {
                                             callback(err, data);
                                         });
                                     });
                                 }
                             });
-                        })(releaseRedisLock(function(err, result) {
+                        })(releaseRedisLock((err, result) => {
                             if (result.error) {
                                 return callback(result.error);
                             }
@@ -378,7 +378,7 @@ function PettyCache() {
                         }));
                     });
                 });
-            })(releaseMemoryCacheLock(function(err, result) {
+            })(releaseMemoryCacheLock((err, result) => {
                 if (result.error) {
                     return callback(result.error);
                 }
@@ -388,7 +388,7 @@ function PettyCache() {
         });
     };
 
-    this.fetchAndRefresh = function(key, func, options, callback) {
+    this.fetchAndRefresh = (key, func, options, callback) => {
         options = options || {};
 
         if (typeof options === 'function') {
@@ -400,22 +400,22 @@ function PettyCache() {
         const ttl = getTtl(options);
 
         // Default callback is a noop
-        callback = callback || function() {};
+        callback = callback || (() => {});
 
         const _this = this;
 
         if (!intervals[key]) {
             const delay = ttl.min / 2;
 
-            intervals[key] = setInterval(function() {
+            intervals[key] = setInterval(() => {
                 // This distributed lock prevents multiple clients from executing func at the same time
-                _this.mutex.lock(`interval-${key}`, { ttl: delay - 100 }, function(err) {
+                _this.mutex.lock(`interval-${key}`, { ttl: delay - 100 }, (err) => {
                     if (err) {
                         return;
                     }
 
                     // Execute the specified function and update cache
-                    func(function(err, data) {
+                    func((err, data) => {
                         if (err) {
                             return;
                         }
@@ -429,7 +429,7 @@ function PettyCache() {
         this.fetch(key, func, options, callback);
     };
 
-    this.get = function(key, callback) {
+    this.get = (key, callback) => {
         // Try to get value from memory cache
         let result = getFromMemoryCache(key);
 
@@ -439,8 +439,8 @@ function PettyCache() {
         }
 
         // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-        lock(`get-memory-cache-lock-${key}`, function(releaseMemoryCacheLock) {
-            async.reflect(function(callback) {
+        lock(`get-memory-cache-lock-${key}`, (releaseMemoryCacheLock) => {
+            async.reflect((callback) => {
                 // Try to get value from memory cache
                 result = getFromMemoryCache(key);
 
@@ -449,7 +449,7 @@ function PettyCache() {
                     return callback(null, result.value);
                 }
 
-                getFromRedis(key, function(err, result) {
+                getFromRedis(key, (err, result) => {
                     if (err) {
                         return callback(err);
                     }
@@ -461,7 +461,7 @@ function PettyCache() {
                     memoryCache.put(key, result.value, random(2000, 5000));
                     callback(null, result.value);
                 });
-            })(releaseMemoryCacheLock(function(err, result) {
+            })(releaseMemoryCacheLock((err, result) => {
                 if (result.error) {
                     return callback(result.error);
                 }
@@ -489,7 +489,7 @@ function PettyCache() {
             const executor = () => {
                 return new Promise((resolve, reject) => {
                     async.retry({ interval: options.retry.interval, times: options.retry.times }, callback => {
-                        redisClient.set(key, '1', 'NX', 'PX', options.ttl, function(err, res) {
+                        redisClient.set(key, '1', 'NX', 'PX', options.ttl, (err, res) => {
                             if (err) {
                                 return callback(err);
                             }
@@ -504,7 +504,7 @@ function PettyCache() {
 
                             callback();
                         });
-                    }, function(err) {
+                    }, (err) => {
                         if (err) {
                             return reject(err);
                         }
@@ -523,7 +523,7 @@ function PettyCache() {
         unlock: (key, callback) => {
             const executor = () => {
                 return new Promise((resolve, reject) => {
-                    redisClient.del(key, function(err) {
+                    redisClient.del(key, (err) => {
                         if (err) {
                             return reject(err);
                         }
@@ -541,7 +541,7 @@ function PettyCache() {
         }
     };
 
-    this.patch = function(key, value, options, callback) {
+    this.patch = (key, value, options, callback) => {
         if (!callback) {
             callback = options;
             options = {};
@@ -549,7 +549,7 @@ function PettyCache() {
 
         const _this = this;
 
-        this.get(key, function(err, data) {
+        this.get(key, (err, data) => {
             if (err) {
                 return callback(err);
             }
@@ -567,7 +567,7 @@ function PettyCache() {
     };
 
     this.semaphore = {
-        acquireLock: function(key, options, callback) {
+        acquireLock: (key, options, callback) => {
             // Options are optional
             if (!callback && typeof options === 'function') {
                 callback = options;
@@ -583,14 +583,14 @@ function PettyCache() {
 
             const _this = this;
 
-            async.retry({ interval: options.retry.interval, times: options.retry.times }, function(callback) {
+            async.retry({ interval: options.retry.interval, times: options.retry.times }, (callback) => {
                 // Mutex lock around semaphore
-                _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, function(err) {
+                _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
                     if (err) {
                         return callback(err);
                     }
 
-                    redisClient.get(key, function(err, data) {
+                    redisClient.get(key, (err, data) => {
                         // If we encountered an error, unlock the mutex lock and return error
                         if (err) {
                             return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
@@ -617,7 +617,7 @@ function PettyCache() {
 
                         pool[index] = { status: 'acquired', ttl: Date.now() + options.ttl };
 
-                        redisClient.set(key, JSON.stringify(pool), function(err) {
+                        redisClient.set(key, JSON.stringify(pool), (err) => {
                             if (err) {
                                 return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
                             }
@@ -628,18 +628,18 @@ function PettyCache() {
                 });
             }, callback);
         },
-        consumeLock: function(key, index, callback) {
-            callback = callback || function() {};
+        consumeLock: (key, index, callback) => {
+            callback = callback || (() => {});
 
             const _this = this;
 
             // Mutex lock around semaphore
-            _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, function(err) {
+            _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
                 if (err) {
                     return callback(err);
                 }
 
-                redisClient.get(key, function(err, data) {
+                redisClient.get(key, (err, data) => {
                     // If we encountered an error, unlock the mutex lock and return error
                     if (err) {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
@@ -664,7 +664,7 @@ function PettyCache() {
                         pool[index] = { status: 'available' };
                     }
 
-                    redisClient.set(key, JSON.stringify(pool), function(err) {
+                    redisClient.set(key, JSON.stringify(pool), (err) => {
                         if (err) {
                             return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
                         }
@@ -674,17 +674,17 @@ function PettyCache() {
                 });
             });
         },
-        expand: function(key, size, callback) {
-            callback = callback || function() {};
+        expand: (key, size, callback) => {
+            callback = callback || (() => {});
 
             const _this = this;
 
-            _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, function(err) {
+            _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
                 if (err) {
                     return callback(err);
                 }
 
-                redisClient.get(key, function(err, data) {
+                redisClient.get(key, (err, data) => {
                     // If we encountered an error, unlock the mutex lock and return error
                     if (err) {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
@@ -707,7 +707,7 @@ function PettyCache() {
 
                     pool = pool.concat(Array(size - pool.length).fill({ status: 'available' }));
 
-                    redisClient.set(key, JSON.stringify(pool), function(err) {
+                    redisClient.set(key, JSON.stringify(pool), (err) => {
                         if (err) {
                             return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
                         }
@@ -717,18 +717,18 @@ function PettyCache() {
                 });
             });
         },
-        releaseLock: function(key, index, callback) {
-            callback = callback || function() {};
+        releaseLock: (key, index, callback) => {
+            callback = callback || (() => {});
 
             const _this = this;
 
             // Mutex lock around semaphore
-            _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, function(err) {
+            _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
                 if (err) {
                     return callback(err);
                 }
 
-                redisClient.get(key, function(err, data) {
+                redisClient.get(key, (err, data) => {
                     // If we encountered an error, unlock the mutex lock and return error
                     if (err) {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
@@ -748,7 +748,7 @@ function PettyCache() {
 
                     pool[index] = { status: 'available' };
 
-                    redisClient.set(key, JSON.stringify(pool), function(err) {
+                    redisClient.set(key, JSON.stringify(pool), (err) => {
                         if (err) {
                             return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
                         }
@@ -758,19 +758,19 @@ function PettyCache() {
                 });
             });
         },
-        reset: function(key, callback) {
-            callback = callback || function() {};
+        reset: (key, callback) => {
+            callback = callback || (() => {});
 
             const _this = this;
 
             // Mutex lock around semaphore
-            this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, function(err) {
+            this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
                 if (err) {
                     return callback(err);
                 }
 
                 // Try to get previously created semaphore
-                redisClient.get(key, function(err, data) {
+                redisClient.get(key, (err, data) => {
                     // If we encountered an error, unlock the mutex lock and return error
                     if (err) {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
@@ -784,7 +784,7 @@ function PettyCache() {
                     let pool = JSON.parse(data);
                     pool = Array(pool.length).fill({ status: 'available' });
 
-                    redisClient.set(key, JSON.stringify(pool), function(err) {
+                    redisClient.set(key, JSON.stringify(pool), (err) => {
                         if (err) {
                             return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
                         }
@@ -794,26 +794,26 @@ function PettyCache() {
                 });
             });
         },
-        retrieveOrCreate: function(key, options, callback) {
+        retrieveOrCreate: (key, options, callback) => {
             // Options are optional
             if (!callback && typeof options === 'function') {
                 callback = options;
                 options = {};
             }
 
-            callback = callback || function() {};
+            callback = callback || (() => {});
             options = options || {};
 
             const _this = this;
 
             // Mutex lock around semaphore retrival or creation
-            this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, function(err) {
+            this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
                 if (err) {
                     return callback(err);
                 }
 
                 // Try to get previously created semaphore
-                redisClient.get(key, function(err, data) {
+                redisClient.get(key, (err, data) => {
                     // If we encountered an error, unlock the mutex lock and return error
                     if (err) {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
@@ -824,7 +824,7 @@ function PettyCache() {
                         return _this.mutex.unlock(`lock:${key}`, () => { callback(null, JSON.parse(data)); });
                     }
 
-                    const getSize = function(callback) {
+                    const getSize = (callback) => {
                         if (typeof options.size === 'function') {
                             return options.size(callback);
                         }
@@ -832,7 +832,7 @@ function PettyCache() {
                         callback(null, Object.prototype.hasOwnProperty.call(options, 'size') ? options.size : 1);
                     };
 
-                    getSize(function(err, size) {
+                    getSize((err, size) => {
                         // If we encountered an error, unlock the mutex lock and return error
                         if (err) {
                             return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
@@ -840,7 +840,7 @@ function PettyCache() {
 
                         const pool = Array(Math.max(size, 1)).fill({ status: 'available' });
 
-                        redisClient.set(key, JSON.stringify(pool), function(err) {
+                        redisClient.set(key, JSON.stringify(pool), (err) => {
                             if (err) {
                                 return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
                             }
@@ -853,7 +853,7 @@ function PettyCache() {
         }
     };
 
-    this.set = function(key, value, options, callback) {
+    this.set = (key, value, options, callback) => {
         options = options || {};
 
         if (typeof options === 'function') {
@@ -865,7 +865,7 @@ function PettyCache() {
         const ttl = getTtl(options);
 
         // Default callback is a noop
-        callback = callback || function() {};
+        callback = callback || (() => {});
 
         // Store value in memory cache with a short expiration
         memoryCache.put(key, value, random(2000, 5000));
@@ -888,8 +888,8 @@ function random(min, max) {
     return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
-PettyCache.parse = function(text) {
-    return JSON.parse(text, function(k, v) {
+PettyCache.parse = (text) => {
+    return JSON.parse(text, (k, v) => {
         if (v === '__NaN') {
             return NaN;
         } else if (v === '__null') {
@@ -902,8 +902,8 @@ PettyCache.parse = function(text) {
     });
 };
 
-PettyCache.stringify = function(value) {
-    return JSON.stringify(value, function(k, v) {
+PettyCache.stringify = (value) => {
+    return JSON.stringify(value, (k, v) => {
         if (typeof v === 'number' && isNaN(v)) {
             return '__NaN';
         } else if (v === null) {

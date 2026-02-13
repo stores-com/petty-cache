@@ -11,8 +11,9 @@ const PettyCache = require('../index.js');
 const redisClient = redis.createClient();
 const pettyCache = new PettyCache(redisClient);
 
-test('new PettyCache()', { concurrency: true }, async (t) => {
-    await t.test('new PettyCache()', { timeout: 7000 }, async () => {
+test('petty-cache', async (t) => {
+    t.test('new PettyCache()', { concurrency: true }, async (t) => {
+    t.test('new PettyCache()', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
         const newPettyCache = new PettyCache();
@@ -39,7 +40,7 @@ test('new PettyCache()', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('new PettyCache(port, host)', { timeout: 7000 }, async () => {
+    t.test('new PettyCache(port, host)', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
         const newPettyCache = new PettyCache(6379, 'localhost');
@@ -66,7 +67,7 @@ test('new PettyCache()', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('new PettyCache(redisClient)', { timeout: 7000 }, async () => {
+    t.test('new PettyCache(redisClient)', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
         const redisClient = redis.createClient();
@@ -95,8 +96,8 @@ test('new PettyCache()', { concurrency: true }, async (t) => {
 });
 });
 
-test('memory-cache', { concurrency: true }, async (t) => {
-    await t.test('memoryCache.put(key, \'\')', async () => {
+    t.test('memory-cache', { concurrency: true }, async (t) => {
+    t.test('memoryCache.put(key, \'\')', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -113,7 +114,7 @@ test('memory-cache', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('memoryCache.put(key, 0)', async () => {
+    t.test('memoryCache.put(key, 0)', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -130,7 +131,7 @@ test('memory-cache', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('memoryCache.put(key, false)', async () => {
+    t.test('memoryCache.put(key, false)', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -147,7 +148,7 @@ test('memory-cache', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('memoryCache.put(key, NaN)', async () => {
+    t.test('memoryCache.put(key, NaN)', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -164,7 +165,7 @@ test('memory-cache', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('memoryCache.put(key, null)', async () => {
+    t.test('memoryCache.put(key, null)', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -181,7 +182,7 @@ test('memory-cache', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('memoryCache.put(key, undefined)', async () => {
+    t.test('memoryCache.put(key, undefined)', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -199,8 +200,8 @@ test('memory-cache', { concurrency: true }, async (t) => {
 });
 });
 
-test('PettyCache.bulkFetch', { concurrency: true }, async (t) => {
-    await t.test('PettyCache.bulkFetch', { timeout: 7000 }, async () => {
+    t.test('PettyCache.bulkFetch', { concurrency: true }, async (t) => {
+    t.test('PettyCache.bulkFetch', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         pettyCache.set('a', 1, () => {
             pettyCache.set('b', '2', () => {
@@ -252,7 +253,7 @@ test('PettyCache.bulkFetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.bulkFetch should cache null values returned by func', { timeout: 7000 }, async () => {
+    t.test('PettyCache.bulkFetch should cache null values returned by func', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
@@ -295,7 +296,7 @@ test('PettyCache.bulkFetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.bulkFetch should return empty object when no keys are passed', async () => {
+    t.test('PettyCache.bulkFetch should return empty object when no keys are passed', async () => {
  await new Promise((resolve) => {
         pettyCache.bulkFetch([], () => {
             throw 'This function should not be called';
@@ -307,7 +308,7 @@ test('PettyCache.bulkFetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.bulkFetch should return error if func returns error', async () => {
+    t.test('PettyCache.bulkFetch should return error if func returns error', async () => {
  await new Promise((resolve) => {
         pettyCache.bulkFetch([Math.random().toString()], (keys, callback) => {
             callback(new Error('PettyCache.bulkFetch should return error if func returns error'));
@@ -320,7 +321,7 @@ test('PettyCache.bulkFetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.bulkFetch should run func again after TTL', { timeout: 7000 }, async () => {
+    t.test('PettyCache.bulkFetch should run func again after TTL', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const keys = [Math.random().toString(), Math.random().toString()];
         let numberOfFuncCalls = 0;
@@ -371,8 +372,8 @@ test('PettyCache.bulkFetch', { concurrency: true }, async (t) => {
 });
 });
 
-test('PettyCache.bulkGet', { concurrency: true }, async (t) => {
-    await t.test('PettyCache.bulkGet should return values', { timeout: 6000 }, async () => {
+    t.test('PettyCache.bulkGet', { concurrency: true }, async (t) => {
+    t.test('PettyCache.bulkGet should return values', { timeout: 6000 }, async () => {
  await new Promise((resolve) => {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
@@ -413,7 +414,7 @@ test('PettyCache.bulkGet', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.bulkGet should return null for missing keys', { timeout: 6000 }, async () => {
+    t.test('PettyCache.bulkGet should return null for missing keys', { timeout: 6000 }, async () => {
  await new Promise((resolve) => {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
@@ -452,7 +453,7 @@ test('PettyCache.bulkGet', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.bulkGet should correctly handle falsy values', { timeout: 12000 }, async () => {
+    t.test('PettyCache.bulkGet should correctly handle falsy values', { timeout: 12000 }, async () => {
  await new Promise((resolve) => {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
@@ -531,7 +532,7 @@ test('PettyCache.bulkGet', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.bulkGet should return empty object when no keys are passed', async () => {
+    t.test('PettyCache.bulkGet should return empty object when no keys are passed', async () => {
  await new Promise((resolve) => {
         pettyCache.bulkGet([], (err, values) => {
             assert.ifError(err);
@@ -542,8 +543,8 @@ test('PettyCache.bulkGet', { concurrency: true }, async (t) => {
 });
 });
 
-test('PettyCache.bulkSet', { concurrency: true }, async (t) => {
-    await t.test('PettyCache.bulkSet should set values', { timeout: 6000 }, async () => {
+    t.test('PettyCache.bulkSet', { concurrency: true }, async (t) => {
+    t.test('PettyCache.bulkSet should set values', { timeout: 6000 }, async () => {
  await new Promise((resolve) => {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
@@ -594,7 +595,7 @@ test('PettyCache.bulkSet', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.bulkSet should set values with the specified TTL option', { timeout: 7000 }, async () => {
+    t.test('PettyCache.bulkSet should set values with the specified TTL option', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
@@ -645,7 +646,7 @@ test('PettyCache.bulkSet', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.bulkSet should set values with the specified TTL option using max and min', { timeout: 10000 }, async () => {
+    t.test('PettyCache.bulkSet should set values with the specified TTL option using max and min', { timeout: 10000 }, async () => {
  await new Promise((resolve) => {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
@@ -696,7 +697,7 @@ test('PettyCache.bulkSet', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.bulkSet should set values with the specified TTL option using max only', { timeout: 10000 }, async () => {
+    t.test('PettyCache.bulkSet should set values with the specified TTL option using max only', { timeout: 10000 }, async () => {
  await new Promise((resolve) => {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
@@ -720,7 +721,7 @@ test('PettyCache.bulkSet', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.bulkSet should set values with the specified TTL option using min only', { timeout: 10000 }, async () => {
+    t.test('PettyCache.bulkSet should set values with the specified TTL option using min only', { timeout: 10000 }, async () => {
  await new Promise((resolve) => {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
@@ -745,8 +746,8 @@ test('PettyCache.bulkSet', { concurrency: true }, async (t) => {
 });
 });
 
-test('PettyCache.del', { concurrency: true }, async (t) => {
-    await t.test('PettyCache.del', async () => {
+    t.test('PettyCache.del', { concurrency: true }, async (t) => {
+    t.test('PettyCache.del', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -774,7 +775,7 @@ test('PettyCache.del', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.del', async () => {
+    t.test('PettyCache.del', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -800,8 +801,8 @@ test('PettyCache.del', { concurrency: true }, async (t) => {
 });
 });
 
-test('PettyCache.fetch', { concurrency: true }, async (t) => {
-    await t.test('PettyCache.fetch', { timeout: 7000 }, async () => {
+    t.test('PettyCache.fetch', async (t) => {
+    t.test('PettyCache.fetch', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -827,7 +828,7 @@ test('PettyCache.fetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetch should cache null values returned by func', { timeout: 7000 }, async () => {
+    t.test('PettyCache.fetch should cache null values returned by func', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -853,7 +854,7 @@ test('PettyCache.fetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetch should cache undefined values returned by func', { timeout: 7000 }, async () => {
+    t.test('PettyCache.fetch should cache undefined values returned by func', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -879,7 +880,7 @@ test('PettyCache.fetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetch should lock around func', async () => {
+    t.test('PettyCache.fetch should lock around func', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
         let numberOfFuncCalls = 0;
@@ -907,7 +908,7 @@ test('PettyCache.fetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetch should run func again after TTL', { timeout: 7000 }, async () => {
+    t.test('PettyCache.fetch should run func again after TTL', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
         let numberOfFuncCalls = 0;
@@ -937,7 +938,7 @@ test('PettyCache.fetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetch should lock around Redis', async () => {
+    t.test('PettyCache.fetch should lock around Redis', async () => {
  await new Promise((resolve) => {
         redisClient.info('commandstats', (err, info) => {
             const lineBefore = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
@@ -980,7 +981,7 @@ test('PettyCache.fetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetch should return error if func returns error', async () => {
+    t.test('PettyCache.fetch should return error if func returns error', async () => {
  await new Promise((resolve) => {
         pettyCache.fetch(Math.random().toString(), (callback) => {
             callback(new Error('PettyCache.fetch should return error if func returns error'));
@@ -993,7 +994,7 @@ test('PettyCache.fetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetch should support async func', { timeout: 7000 }, async () => {
+    t.test('PettyCache.fetch should support async func', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -1021,7 +1022,7 @@ test('PettyCache.fetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetch should support async func with callback', { timeout: 7000 }, async () => {
+    t.test('PettyCache.fetch should support async func with callback', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -1049,7 +1050,7 @@ test('PettyCache.fetch', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetch should support sync func without callback', { timeout: 7000 }, async () => {
+    t.test('PettyCache.fetch should support sync func without callback', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -1078,8 +1079,8 @@ test('PettyCache.fetch', { concurrency: true }, async (t) => {
 });
 });
 
-test('PettyCache.fetchAndRefresh', { concurrency: true }, async (t) => {
-    await t.test('PettyCache.fetchAndRefresh', { timeout: 7000 }, async () => {
+    t.test('PettyCache.fetchAndRefresh', { concurrency: true }, async (t) => {
+    t.test('PettyCache.fetchAndRefresh', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -1105,7 +1106,7 @@ test('PettyCache.fetchAndRefresh', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetchAndRefresh should run func again to refresh', { timeout: 7000 }, async () => {
+    t.test('PettyCache.fetchAndRefresh should run func again to refresh', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
         let numberOfFuncCalls = 0;
@@ -1135,7 +1136,7 @@ test('PettyCache.fetchAndRefresh', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetchAndRefresh should not allow multiple clients to execute func at the same time', { timeout: 7000 }, async () => {
+    t.test('PettyCache.fetchAndRefresh should not allow multiple clients to execute func at the same time', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
         let numberOfFuncCalls = 0;
@@ -1173,7 +1174,7 @@ test('PettyCache.fetchAndRefresh', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetchAndRefresh should return error if func returns error', { timeout: 7000 }, async () => {
+    t.test('PettyCache.fetchAndRefresh should return error if func returns error', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -1199,7 +1200,7 @@ test('PettyCache.fetchAndRefresh', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.fetchAndRefresh should not require options', async () => {
+    t.test('PettyCache.fetchAndRefresh should not require options', async () => {
  await new Promise((resolve) => {
         pettyCache.fetchAndRefresh(Math.random().toString(), (callback) => {
             return callback(null, { foo: 'bar' });
@@ -1210,8 +1211,8 @@ test('PettyCache.fetchAndRefresh', { concurrency: true }, async (t) => {
 });
 });
 
-test('PettyCache.get', { concurrency: true }, async (t) => {
-    await t.test('PettyCache.get should return value', { timeout: 7000 }, async () => {
+    t.test('PettyCache.get', { concurrency: true }, async (t) => {
+    t.test('PettyCache.get should return value', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -1231,7 +1232,7 @@ test('PettyCache.get', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.get should return null for missing keys', async () => {
+    t.test('PettyCache.get should return null for missing keys', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -1247,9 +1248,9 @@ test('PettyCache.get', { concurrency: true }, async (t) => {
 });
 });
 
-test('PettyCache.mutex', { concurrency: true }, async (t) => {
-    await t.test('PettyCache.mutex.lock (callbacks)', { concurrency: true }, async (t) => {
-        await t.test('PettyCache.mutex.lock should lock for 1 second by default', async () => {
+    t.test('PettyCache.mutex', { concurrency: true }, async (t) => {
+    t.test('PettyCache.mutex.lock (callbacks)', { concurrency: true }, async (t) => {
+        t.test('PettyCache.mutex.lock should lock for 1 second by default', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1270,7 +1271,7 @@ test('PettyCache.mutex', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('PettyCache.mutex.lock should lock for 2 seconds when ttl parameter is specified', { timeout: 3000 }, async () => {
+        t.test('PettyCache.mutex.lock should lock for 2 seconds when ttl parameter is specified', { timeout: 3000 }, async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1297,7 +1298,7 @@ test('PettyCache.mutex', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('PettyCache.mutex.lock should acquire a lock after retries', { timeout: 3000 }, async () => {
+        t.test('PettyCache.mutex.lock should acquire a lock after retries', { timeout: 3000 }, async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1317,8 +1318,8 @@ test('PettyCache.mutex', { concurrency: true }, async (t) => {
 });
     });
 
-    await t.test('PettyCache.mutex.lock (promises)', { concurrency: true }, async (t) => {
-        await t.test('PettyCache.mutex.lock should lock for 1 second by default', async () => {
+    t.test('PettyCache.mutex.lock (promises)', { concurrency: true }, async (t) => {
+        t.test('PettyCache.mutex.lock should lock for 1 second by default', async () => {
             const key = Math.random().toString();
 
             await pettyCache.mutex.lock(key);
@@ -1336,7 +1337,7 @@ test('PettyCache.mutex', { concurrency: true }, async (t) => {
             await pettyCache.mutex.lock(key);
         });
 
-        await t.test('PettyCache.mutex.lock should lock for 2 seconds when ttl parameter is specified', { timeout: 4000 }, async () => {
+        t.test('PettyCache.mutex.lock should lock for 2 seconds when ttl parameter is specified', { timeout: 4000 }, async () => {
             const key = Math.random().toString();
 
             await pettyCache.mutex.lock(key, { ttl: 2000 });
@@ -1364,7 +1365,7 @@ test('PettyCache.mutex', { concurrency: true }, async (t) => {
             await pettyCache.mutex.lock(key);
         });
 
-        await t.test('PettyCache.mutex.lock should acquire a lock after retries', { timeout: 4000 }, async () => {
+        t.test('PettyCache.mutex.lock should acquire a lock after retries', { timeout: 4000 }, async () => {
             const key = Math.random().toString();
 
             await pettyCache.mutex.lock(key, { ttl: 2000 });
@@ -1381,8 +1382,8 @@ test('PettyCache.mutex', { concurrency: true }, async (t) => {
         });
     });
 
-    await t.test('PettyCache.mutex.unlock (callbacks)', { concurrency: true }, async (t) => {
-        await t.test('PettyCache.mutex.unlock should unlock', async () => {
+    t.test('PettyCache.mutex.unlock (callbacks)', { concurrency: true }, async (t) => {
+        t.test('PettyCache.mutex.unlock should unlock', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1403,7 +1404,7 @@ test('PettyCache.mutex', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('PettyCache.mutex.unlock should work without a callback', async () => {
+        t.test('PettyCache.mutex.unlock should work without a callback', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1417,8 +1418,8 @@ test('PettyCache.mutex', { concurrency: true }, async (t) => {
 });
     });
 
-    await t.test('PettyCache.mutex.unlock (promises)', async (t) => {
-        await t.test('PettyCache.mutex.unlock should unlock', async () => {
+    t.test('PettyCache.mutex.unlock (promises)', async (t) => {
+        t.test('PettyCache.mutex.unlock should unlock', async () => {
             const key = Math.random().toString();
 
             await pettyCache.mutex.lock(key, { ttl: 10000 });
@@ -1437,12 +1438,12 @@ test('PettyCache.mutex', { concurrency: true }, async (t) => {
     });
 });
 
-test('PettyCache.patch', async (t) => {
+    t.test('PettyCache.patch', async (t) => {
     const key = Math.random().toString();
 
     await new Promise((resolve) => { pettyCache.set(key, { a: 1, b: 2, c: 3 }, resolve); });
 
-    await t.test('PettyCache.patch should fail if the key does not exist', async () => {
+    t.test('PettyCache.patch should fail if the key does not exist', async () => {
  await new Promise((resolve) => {
         pettyCache.patch('xyz', { b: 3 }, (err) => {
             assert(err, 'No error provided');
@@ -1451,7 +1452,7 @@ test('PettyCache.patch', async (t) => {
     });
 });
 
-    await t.test('PettyCache.patch should update the values of given object keys', async () => {
+    t.test('PettyCache.patch should update the values of given object keys', async () => {
  await new Promise((resolve) => {
         pettyCache.patch(key, { b: 4, c: 5 }, (err) => {
             assert(!err, 'Error: ' + err);
@@ -1465,7 +1466,7 @@ test('PettyCache.patch', async (t) => {
     });
 });
 
-    await t.test('PettyCache.patch should update the values of given object keys with options', async () => {
+    t.test('PettyCache.patch should update the values of given object keys with options', async () => {
  await new Promise((resolve) => {
         pettyCache.patch(key, { b: 5, c: 6 }, { ttl: 10000 }, (err) => {
             assert(!err, 'Error: ' + err);
@@ -1480,9 +1481,9 @@ test('PettyCache.patch', async (t) => {
 });
 });
 
-test('PettyCache.semaphore', { concurrency: true }, async (t) => {
-    await t.test('PettyCache.semaphore.acquireLock', { concurrency: true }, async (t) => {
-        await t.test('should aquire a lock', async () => {
+    t.test('PettyCache.semaphore', { concurrency: true }, async (t) => {
+    t.test('PettyCache.semaphore.acquireLock', { concurrency: true }, async (t) => {
+        t.test('should aquire a lock', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1503,7 +1504,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should not aquire a lock', async () => {
+        t.test('should not aquire a lock', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1523,7 +1524,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should aquire a lock after ttl', async () => {
+        t.test('should aquire a lock after ttl', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1550,7 +1551,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should aquire a lock with specified options', { timeout: 5000 }, async () => {
+        t.test('should aquire a lock with specified options', { timeout: 5000 }, async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1571,7 +1572,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should fail if the semaphore does not exist', async () => {
+        t.test('should fail if the semaphore does not exist', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1584,8 +1585,8 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
 });
     });
 
-    await t.test('PettyCache.semaphore.consumeLock', { concurrency: true }, async (t) => {
-        await t.test('should consume a lock', async () => {
+    t.test('PettyCache.semaphore.consumeLock', { concurrency: true }, async (t) => {
+        t.test('should consume a lock', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1618,7 +1619,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should ensure at least one lock is not consumed', async () => {
+        t.test('should ensure at least one lock is not consumed', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1656,7 +1657,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should fail if the semaphore does not exist', async () => {
+        t.test('should fail if the semaphore does not exist', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1668,7 +1669,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should fail if index is larger than semaphore', async () => {
+        t.test('should fail if index is larger than semaphore', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1689,7 +1690,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('callback is optional', async () => {
+        t.test('callback is optional', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1721,8 +1722,8 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
 });
     });
 
-    await t.test('PettyCache.semaphore.expand', { concurrency: true }, async (t) => {
-        await t.test('should increase the size of a semaphore pool', async () => {
+    t.test('PettyCache.semaphore.expand', { concurrency: true }, async (t) => {
+        t.test('should increase the size of a semaphore pool', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1743,7 +1744,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should refuse to shrink a pool', async () => {
+        t.test('should refuse to shrink a pool', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1760,7 +1761,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should succeed if pool size is already equal to the specified size', async () => {
+        t.test('should succeed if pool size is already equal to the specified size', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1781,7 +1782,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('callback is optional', async () => {
+        t.test('callback is optional', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1800,7 +1801,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should fail if the semaphore does not exist', async () => {
+        t.test('should fail if the semaphore does not exist', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1813,8 +1814,8 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
 });
     });
 
-    await t.test('PettyCache.semaphore.releaseLock', { concurrency: true }, async (t) => {
-        await t.test('should release a lock', async () => {
+    t.test('PettyCache.semaphore.releaseLock', { concurrency: true }, async (t) => {
+        t.test('should release a lock', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1843,7 +1844,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should fail to release a lock outside of the semaphore size', async () => {
+        t.test('should fail to release a lock outside of the semaphore size', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1864,7 +1865,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('callback is optional', async () => {
+        t.test('callback is optional', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1891,7 +1892,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should fail if the semaphore does not exist', async () => {
+        t.test('should fail if the semaphore does not exist', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1904,8 +1905,8 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
 });
     });
 
-    await t.test('PettyCache.semaphore.reset', { concurrency: true }, async (t) => {
-        await t.test('should reset all locks', async () => {
+    t.test('PettyCache.semaphore.reset', { concurrency: true }, async (t) => {
+        t.test('should reset all locks', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1939,7 +1940,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('callback is optional', async () => {
+        t.test('callback is optional', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1971,7 +1972,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should fail if the semaphore does not exist', async () => {
+        t.test('should fail if the semaphore does not exist', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -1984,8 +1985,8 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
 });
     });
 
-    await t.test('PettyCache.semaphore.retrieveOrCreate', { concurrency: true }, async (t) => {
-        await t.test('should create a new semaphore', async () => {
+    t.test('PettyCache.semaphore.retrieveOrCreate', { concurrency: true }, async (t) => {
+        t.test('should create a new semaphore', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -2006,7 +2007,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should have a min size of 1', async () => {
+        t.test('should have a min size of 1', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -2027,7 +2028,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('should allow options.size to provide a function', async () => {
+        t.test('should allow options.size to provide a function', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -2048,7 +2049,7 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
         });
 });
 
-        await t.test('callback is optional', async () => {
+        t.test('callback is optional', async () => {
  await new Promise((resolve) => {
             const key = Math.random().toString();
 
@@ -2066,8 +2067,8 @@ test('PettyCache.semaphore', { concurrency: true }, async (t) => {
     });
 });
 
-test('PettyCache.set', { concurrency: true }, async (t) => {
-    await t.test('PettyCache.set should set a value', { timeout: 7000 }, async () => {
+    t.test('PettyCache.set', { concurrency: true }, async (t) => {
+    t.test('PettyCache.set should set a value', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2087,14 +2088,14 @@ test('PettyCache.set', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.set should work without a callback', async () => {
+    t.test('PettyCache.set should work without a callback', async () => {
  await new Promise((resolve) => {
         pettyCache.set(Math.random().toString(), 'hello world');
         resolve();
     });
 });
 
-    await t.test('PettyCache.set should set a value with the specified TTL option', { timeout: 7000 }, async () => {
+    t.test('PettyCache.set should set a value with the specified TTL option', { timeout: 7000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2114,7 +2115,7 @@ test('PettyCache.set', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.set should set a value with the specified TTL option using max and min', { timeout: 10000 }, async () => {
+    t.test('PettyCache.set should set a value with the specified TTL option using max and min', { timeout: 10000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2141,7 +2142,7 @@ test('PettyCache.set', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.set should set a value with the specified TTL option using min only', { timeout: 10000 }, async () => {
+    t.test('PettyCache.set should set a value with the specified TTL option using min only', { timeout: 10000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2154,7 +2155,7 @@ test('PettyCache.set', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.set should set a value with the specified TTL option using max only', { timeout: 10000 }, async () => {
+    t.test('PettyCache.set should set a value with the specified TTL option using max only', { timeout: 10000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2167,7 +2168,7 @@ test('PettyCache.set', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.set(key, \'\')', { timeout: 11000 }, async () => {
+    t.test('PettyCache.set(key, \'\')', { timeout: 11000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2199,7 +2200,7 @@ test('PettyCache.set', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.set(key, 0)', { timeout: 11000 }, async () => {
+    t.test('PettyCache.set(key, 0)', { timeout: 11000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2231,7 +2232,7 @@ test('PettyCache.set', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.set(key, false)', { timeout: 11000 }, async () => {
+    t.test('PettyCache.set(key, false)', { timeout: 11000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2263,7 +2264,7 @@ test('PettyCache.set', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.set(key, NaN)', { timeout: 11000 }, async () => {
+    t.test('PettyCache.set(key, NaN)', { timeout: 11000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2295,7 +2296,7 @@ test('PettyCache.set', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.set(key, null)', { timeout: 11000 }, async () => {
+    t.test('PettyCache.set(key, null)', { timeout: 11000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2327,7 +2328,7 @@ test('PettyCache.set', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('PettyCache.set(key, undefined)', { timeout: 11000 }, async () => {
+    t.test('PettyCache.set(key, undefined)', { timeout: 11000 }, async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2360,8 +2361,8 @@ test('PettyCache.set', { concurrency: true }, async (t) => {
 });
 });
 
-test('redisClient', { concurrency: true }, async (t) => {
-    await t.test('redisClient.mget(falsy keys)', async () => {
+    t.test('redisClient', { concurrency: true }, async (t) => {
+    t.test('redisClient.mget(falsy keys)', async () => {
  await new Promise((resolve) => {
         const key1 = Math.random().toString();
         const key2 = Math.random().toString();
@@ -2411,7 +2412,7 @@ test('redisClient', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('redisClient.psetex(key, \'\')', async () => {
+    t.test('redisClient.psetex(key, \'\')', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2436,7 +2437,7 @@ test('redisClient', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('redisClient.psetex(key, 0)', async () => {
+    t.test('redisClient.psetex(key, 0)', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2461,7 +2462,7 @@ test('redisClient', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('redisClient.psetex(key, false)', async () => {
+    t.test('redisClient.psetex(key, false)', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2486,7 +2487,7 @@ test('redisClient', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('redisClient.psetex(key, NaN)', async () => {
+    t.test('redisClient.psetex(key, NaN)', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2511,7 +2512,7 @@ test('redisClient', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('redisClient.psetex(key, null)', async () => {
+    t.test('redisClient.psetex(key, null)', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2536,7 +2537,7 @@ test('redisClient', { concurrency: true }, async (t) => {
     });
 });
 
-    await t.test('redisClient.psetex(key, undefined)', async () => {
+    t.test('redisClient.psetex(key, undefined)', async () => {
  await new Promise((resolve) => {
         const key = Math.random().toString();
 
@@ -2562,10 +2563,10 @@ test('redisClient', { concurrency: true }, async (t) => {
 });
 });
 
-test('Benchmark', async (t) => {
+    t.test('Benchmark', async (t) => {
     const emojis = require('./emojis.json');
 
-    await t.test('PettyCache should be faster than node-redis', async () => {
+    t.test('PettyCache should be faster than node-redis', async () => {
  await new Promise((resolve) => {
         let pettyCacheEnd;
         const pettyCacheKey = Math.random().toString();
@@ -2611,5 +2612,6 @@ test('Benchmark', async (t) => {
             });
         });
     });
+});
 });
 });
