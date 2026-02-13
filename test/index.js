@@ -1132,6 +1132,25 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 });
             });
         });
+
+        t.test('PettyCache.get should return value (promises)', async () => {
+            const key = Math.random().toString();
+
+            await pettyCache.set(key, 'hello world');
+            const value = await pettyCache.get(key);
+            assert.equal(value, 'hello world');
+
+            // Wait for memory cache to expire
+            await new Promise(resolve => setTimeout(resolve, 5001));
+            const value2 = await pettyCache.get(key);
+            assert.equal(value2, 'hello world');
+        });
+
+        t.test('PettyCache.get should return null for missing keys (promises)', async () => {
+            const key = Math.random().toString();
+            const value = await pettyCache.get(key);
+            assert.strictEqual(value, null);
+        });
     });
 
     t.test('PettyCache.mutex', { concurrency: true }, async (t) => {
@@ -1352,6 +1371,19 @@ test('petty-cache', { concurrency: true }, async (t) => {
                     });
                 });
             });
+        });
+
+        t.test('PettyCache.patch should update the values of given object keys (promises)', async () => {
+            const key = Math.random().toString();
+
+            await pettyCache.set(key, { a: 1, b: 2, c: 3 });
+            await pettyCache.patch(key, { b: 4, c: 5 });
+            const data = await pettyCache.get(key);
+            assert.deepEqual(data, { a: 1, b: 4, c: 5 });
+        });
+
+        t.test('PettyCache.patch should reject if the key does not exist (promises)', async () => {
+            await assert.rejects(() => pettyCache.patch(Math.random().toString(), { b: 3 }), { message: /does not exist/ });
         });
     });
 
@@ -2156,6 +2188,34 @@ test('petty-cache', { concurrency: true }, async (t) => {
                     }, 5001);
                 });
             });
+        });
+
+        t.test('PettyCache.set should set a value (promises)', async () => {
+            const key = Math.random().toString();
+
+            await pettyCache.set(key, 'hello world');
+            const value = await pettyCache.get(key);
+            assert.equal(value, 'hello world');
+
+            // Wait for memory cache to expire
+            await new Promise(resolve => setTimeout(resolve, 5001));
+            const value2 = await pettyCache.get(key);
+            assert.equal(value2, 'hello world');
+        });
+
+        t.test('PettyCache.set should set a value with options (promises)', async () => {
+            const key = Math.random().toString();
+
+            await pettyCache.set(key, 'hello world', { ttl: 6000 });
+            const value = await pettyCache.get(key);
+            assert.equal(value, 'hello world');
+        });
+
+        t.test('PettyCache.set should return a promise when no callback is provided', async () => {
+            const key = Math.random().toString();
+            const result = pettyCache.set(key, 'hello world');
+            assert(result instanceof Promise);
+            await result;
         });
     });
 

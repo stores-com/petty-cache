@@ -430,45 +430,55 @@ function PettyCache() {
     };
 
     this.get = (key, callback) => {
-        // Try to get value from memory cache
-        let result = getFromMemoryCache(key);
-
-        // Return value from memory cache if it exists
-        if (result.exists) {
-            return callback(null, result.value);
-        }
-
-        // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-        lock(`get-memory-cache-lock-${key}`, (releaseMemoryCacheLock) => {
-            async.reflect((callback) => {
+        const executor = () => {
+            return new Promise((resolve, reject) => {
                 // Try to get value from memory cache
-                result = getFromMemoryCache(key);
+                let result = getFromMemoryCache(key);
 
                 // Return value from memory cache if it exists
                 if (result.exists) {
-                    return callback(null, result.value);
+                    return resolve(result.value);
                 }
 
-                getFromRedis(key, (err, result) => {
-                    if (err) {
-                        return callback(err);
-                    }
+                // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
+                lock(`get-memory-cache-lock-${key}`, (releaseMemoryCacheLock) => {
+                    async.reflect((callback) => {
+                        // Try to get value from memory cache
+                        result = getFromMemoryCache(key);
 
-                    if (!result.exists) {
-                        return callback(null, null);
-                    }
+                        // Return value from memory cache if it exists
+                        if (result.exists) {
+                            return callback(null, result.value);
+                        }
 
-                    memoryCache.put(key, result.value, random(2000, 5000));
-                    callback(null, result.value);
+                        getFromRedis(key, (err, result) => {
+                            if (err) {
+                                return callback(err);
+                            }
+
+                            if (!result.exists) {
+                                return callback(null, null);
+                            }
+
+                            memoryCache.put(key, result.value, random(2000, 5000));
+                            callback(null, result.value);
+                        });
+                    })(releaseMemoryCacheLock((err, result) => {
+                        if (result.error) {
+                            return reject(result.error);
+                        }
+
+                        resolve(result.value);
+                    }));
                 });
-            })(releaseMemoryCacheLock((err, result) => {
-                if (result.error) {
-                    return callback(result.error);
-                }
+            });
+        };
 
-                callback(null, result.value);
-            }));
-        });
+        if (callback) {
+            executor().then(result => callback(null, result)).catch(callback);
+        } else {
+            return executor();
+        }
     };
 
     this.mutex = {
@@ -542,28 +552,46 @@ function PettyCache() {
     };
 
     this.patch = (key, value, options, callback) => {
-        if (!callback) {
+        if (!callback && typeof options === 'function') {
             callback = options;
             options = {};
         }
 
+        options = options || {};
+
         const _this = this;
 
-        this.get(key, (err, data) => {
-            if (err) {
-                return callback(err);
-            }
+        const executor = () => {
+            return new Promise((resolve, reject) => {
+                _this.get(key, (err, data) => {
+                    if (err) {
+                        return reject(err);
+                    }
 
-            if (!data) {
-                return callback(new Error(`Key ${key} does not exist`));
-            }
+                    if (!data) {
+                        return reject(new Error(`Key ${key} does not exist`));
+                    }
 
-            for (let k in value) {
-                data[k] = value[k];
-            }
+                    for (let k in value) {
+                        data[k] = value[k];
+                    }
 
-            _this.set(key, data, options, callback);
-        });
+                    _this.set(key, data, options, (err) => {
+                        if (err) {
+                            return reject(err);
+                        }
+
+                        resolve();
+                    });
+                });
+            });
+        };
+
+        if (callback) {
+            executor().then(result => callback(null, result)).catch(callback);
+        } else {
+            return executor();
+        }
     };
 
     this.semaphore = {
@@ -864,14 +892,27 @@ function PettyCache() {
         // Get TTL based on specified options
         const ttl = getTtl(options);
 
-        // Default callback is a noop
-        callback = callback || (() => {});
+        const executor = () => {
+            return new Promise((resolve, reject) => {
+                // Store value in memory cache with a short expiration
+                memoryCache.put(key, value, random(2000, 5000));
 
-        // Store value in memory cache with a short expiration
-        memoryCache.put(key, value, random(2000, 5000));
+                // Store value in Redis
+                redisClient.psetex(key, random(ttl.min, ttl.max), PettyCache.stringify(value), (err) => {
+                    if (err) {
+                        return reject(err);
+                    }
 
-        // Store value is Redis
-        redisClient.psetex(key, random(ttl.min, ttl.max), PettyCache.stringify(value), callback);
+                    resolve();
+                });
+            });
+        };
+
+        if (callback) {
+            executor().then(result => callback(null, result)).catch(callback);
+        } else {
+            return executor();
+        }
     };
 
     // Semaphore functions need to be bound to the main PettyCache object
