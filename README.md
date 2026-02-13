@@ -335,7 +335,7 @@ await pettyCache.set('key', { a: 'b' });
 
 ### pettyCache.mutex.lock(key, [options, [callback]])
 
-Attempts to acquire a distributed lock for the specified key. Optionally retries a specified number of times by waiting a specified amount of time between attempts.
+Attempts to acquire a distributed lock for the specified key. Optionally retries a specified number of times by waiting a specified amount of time between attempts. Supports both callbacks and promises.
 
 ```javascript
 pettyCache.mutex.lock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 }, function(err) {
@@ -346,6 +346,13 @@ pettyCache.mutex.lock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 }, 
     // We were able to acquire the lock. Do work and then unlock.
     pettyCache.mutex.unlock('key');
 });
+```
+
+```javascript
+await pettyCache.mutex.lock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 });
+
+// We were able to acquire the lock. Do work and then unlock.
+await pettyCache.mutex.unlock('key');
 ```
 
 **Options**
@@ -362,7 +369,7 @@ pettyCache.mutex.lock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 }, 
 
 ### pettyCache.mutex.unlock(key, [callback])
 
-Releases the distributed lock for the specified key.
+Releases the distributed lock for the specified key. Supports both callbacks and promises.
 
 ```javascript
 pettyCache.mutex.unlock('key', function(err) {
@@ -370,6 +377,10 @@ pettyCache.mutex.unlock('key', function(err) {
         // We weren't able to reach Redis. Your lock will expire after its TTL, but you might want to log this error.
     }
 });
+```
+
+```javascript
+await pettyCache.mutex.unlock('key');
 ```
 
 ## Semaphore
