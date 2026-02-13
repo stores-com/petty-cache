@@ -28,8 +28,8 @@ Provides a pool of distributed locks with the ability to release a slot back to 
 
 ```javascript
 // Setup petty-cache
-var PettyCache = require('petty-cache');
-var pettyCache = new PettyCache();
+const PettyCache = require('petty-cache');
+const pettyCache = new PettyCache();
 
 // Fetch some data
 pettyCache.fetch('key', function(callback) {
@@ -71,7 +71,7 @@ Attempts to retrieve the values of the keys specified in the `keys` array. Any k
 ```javascript
 // Let's assume a and b are already cached as 1 and 2
 pettyCache.bulkFetch(['a', 'b', 'c', 'd'], function(keys, callback) {
-    var results = {};
+    const results = {};
 
     keys.forEach(function(key) {
         results[key] = key.toUpperCase();
@@ -501,6 +501,6 @@ pettyCache.semaphore.retrieveOrCreate('key', { size: 10 }, function(err) {
 
 ```javascript
 {
-    size: 1 || function() { var x = 1 + 1; callback(null, x); } // The number of locks to create in the semaphore's pool. Optionally, size can be a `callback(err, size)` function.
+    size: 1 || function() { const x = 1 + 1; callback(null, x); } // The number of locks to create in the semaphore's pool. Optionally, size can be a `callback(err, size)` function.
 }
 ```
