@@ -2600,6 +2600,78 @@ test('PettyCache.semaphore.acquireLock should return error if Redis GET fails', 
     });
 });
 
+test('PettyCache.semaphore.consumeLock should return error if Redis GET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+
+    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.semaphore.consumeLock(Math.random().toString(), 0, (err) => {
+        stubClient.get = originalGet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis GET error');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.expand should return error if Redis GET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+
+    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.semaphore.expand(Math.random().toString(), 10, (err) => {
+        stubClient.get = originalGet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis GET error');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.releaseLock should return error if Redis GET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+
+    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.semaphore.releaseLock(Math.random().toString(), 0, (err) => {
+        stubClient.get = originalGet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis GET error');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.reset should return error if Redis GET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+
+    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.semaphore.reset(Math.random().toString(), (err) => {
+        stubClient.get = originalGet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis GET error');
+
+        done();
+    });
+});
+
 test('PettyCache.fetch should lock around Redis', (t, done) => {
     redisClient.info('commandstats', (err, info) => {
         const lineBefore = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
