@@ -2854,6 +2854,99 @@ test('PettyCache.semaphore.reset should return error if Redis SET fails', (t, do
     });
 });
 
+test('PettyCache.semaphore.retrieveOrCreate should return error if mutex lock fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const stubCache = new PettyCache(stubClient);
+
+    stubCache.mutex.lock = (key, options, callback) => callback(new Error('mutex lock error'));
+
+    stubCache.semaphore.retrieveOrCreate(Math.random().toString(), (err) => {
+        assert(err);
+        assert.strictEqual(err.message, 'mutex lock error');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.acquireLock should return error if mutex lock fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const stubCache = new PettyCache(stubClient);
+
+    stubCache.mutex.lock = (key, options, callback) => callback(new Error('mutex lock error'));
+
+    stubCache.semaphore.acquireLock(Math.random().toString(), (err) => {
+        assert(err);
+        assert.strictEqual(err.message, 'mutex lock error');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.consumeLock should return error if mutex lock fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const stubCache = new PettyCache(stubClient);
+
+    stubCache.mutex.lock = (key, options, callback) => callback(new Error('mutex lock error'));
+
+    stubCache.semaphore.consumeLock(Math.random().toString(), 0, (err) => {
+        assert(err);
+        assert.strictEqual(err.message, 'mutex lock error');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.expand should return error if mutex lock fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const stubCache = new PettyCache(stubClient);
+
+    stubCache.mutex.lock = (key, options, callback) => callback(new Error('mutex lock error'));
+
+    stubCache.semaphore.expand(Math.random().toString(), 10, (err) => {
+        assert(err);
+        assert.strictEqual(err.message, 'mutex lock error');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.releaseLock should return error if mutex lock fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const stubCache = new PettyCache(stubClient);
+
+    stubCache.mutex.lock = (key, options, callback) => callback(new Error('mutex lock error'));
+
+    stubCache.semaphore.releaseLock(Math.random().toString(), 0, (err) => {
+        assert(err);
+        assert.strictEqual(err.message, 'mutex lock error');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.reset should return error if mutex lock fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const stubCache = new PettyCache(stubClient);
+
+    stubCache.mutex.lock = (key, options, callback) => callback(new Error('mutex lock error'));
+
+    stubCache.semaphore.reset(Math.random().toString(), (err) => {
+        assert(err);
+        assert.strictEqual(err.message, 'mutex lock error');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.retrieveOrCreate should return error if size function fails', (t, done) => {
+    pettyCache.semaphore.retrieveOrCreate(Math.random().toString(), { size: (callback) => callback(new Error('size error')) }, (err) => {
+        assert(err);
+        assert.strictEqual(err.message, 'size error');
+
+        done();
+    });
+});
+
 test('PettyCache.fetch should lock around Redis', (t, done) => {
     redisClient.info('commandstats', (err, info) => {
         const lineBefore = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
