@@ -3119,6 +3119,53 @@ test('PettyCache.get should return cached value from double-checked lock', (t, d
     });
 });
 
+test('PettyCache.set should return error if Redis PSETEX fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalPsetex = stubClient.psetex.bind(stubClient);
+
+    stubClient.psetex = (...args) => {
+        stubClient.psetex = originalPsetex;
+        const callback = args[args.length - 1];
+        callback(new Error('Redis PSETEX error'));
+    };
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.set(Math.random().toString(), 'value', (err) => {
+        stubClient.psetex = originalPsetex;
+        assert(err);
+        assert.strictEqual(err.message, 'Redis PSETEX error');
+
+        done();
+    });
+});
+
+test('PettyCache.patch should return error if Redis PSETEX fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalPsetex = stubClient.psetex.bind(stubClient);
+    const key = Math.random().toString();
+
+    const pettyCache = new PettyCache(stubClient);
+
+    // First set a value so patch has something to patch
+    pettyCache.set(key, { a: 1 }, () => {
+        // Now stub psetex to fail on the next call (patch's inner set)
+        stubClient.psetex = (...args) => {
+            stubClient.psetex = originalPsetex;
+            const callback = args[args.length - 1];
+            callback(new Error('Redis PSETEX error'));
+        };
+
+        pettyCache.patch(key, { b: 2 }, (err) => {
+            stubClient.psetex = originalPsetex;
+            assert(err);
+            assert.strictEqual(err.message, 'Redis PSETEX error');
+
+            done();
+        });
+    });
+});
+
 test('PettyCache.fetch should lock around Redis', (t, done) => {
     redisClient.info('commandstats', (err, info) => {
         const lineBefore = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
