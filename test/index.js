@@ -2492,6 +2492,114 @@ test('PettyCache.mutex.lock should return error if Redis SET fails', (t, done) =
     });
 });
 
+test('PettyCache.del should return error if Redis DEL fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalDel = stubClient.del.bind(stubClient);
+
+    stubClient.del = (key, callback) => callback(new Error('Redis DEL error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.del(Math.random().toString(), (err) => {
+        stubClient.del = originalDel;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis DEL error');
+
+        done();
+    });
+});
+
+test('PettyCache.mutex.unlock should return error if Redis DEL fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalDel = stubClient.del.bind(stubClient);
+
+    stubClient.del = (key, callback) => callback(new Error('Redis DEL error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.mutex.unlock(Math.random().toString(), (err) => {
+        stubClient.del = originalDel;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis DEL error');
+
+        done();
+    });
+});
+
+test('PettyCache.patch should return error if Redis GET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+
+    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.patch(Math.random().toString(), { a: 1 }, (err) => {
+        stubClient.get = originalGet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis GET error');
+
+        done();
+    });
+});
+
+test('PettyCache.mutex.lock should return error if Redis SET returns unexpected response', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalSet = stubClient.set.bind(stubClient);
+
+    stubClient.set = (...args) => args[args.length - 1](null, 'UNEXPECTED');
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.mutex.lock(Math.random().toString(), (err) => {
+        stubClient.set = originalSet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'UNEXPECTED');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.retrieveOrCreate should return error if Redis GET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+
+    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.semaphore.retrieveOrCreate(Math.random().toString(), (err) => {
+        stubClient.get = originalGet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis GET error');
+
+        done();
+    });
+});
+
+test('PettyCache.semaphore.acquireLock should return error if Redis GET fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalGet = stubClient.get.bind(stubClient);
+
+    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+
+    const pettyCache = new PettyCache(stubClient);
+
+    pettyCache.semaphore.acquireLock(Math.random().toString(), (err) => {
+        stubClient.get = originalGet;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis GET error');
+
+        done();
+    });
+});
+
 test('PettyCache.fetch should lock around Redis', (t, done) => {
     redisClient.info('commandstats', (err, info) => {
         const lineBefore = info.split('\n').find(i => i.startsWith('cmdstat_get:'));
