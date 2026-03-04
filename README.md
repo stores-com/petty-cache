@@ -1,7 +1,7 @@
 # petty-cache
 
 [![Build Status](https://github.com/stores-com/petty-cache/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/stores-com/petty-cache/actions?query=workflow%3Abuild+branch%3Amain)
-[![Coverage Status](https://coveralls.io/repos/github/stores-com/petty-cache/badge.svg?branch=main)](https://coveralls.io/github/stores-com/petty-cache?branch=main)
+[![Coverage Status](https://coveralls.io/repos/github/stores-com/petty-cache/badge.svg?branch=main&t=Pc1x8G)](https://coveralls.io/github/stores-com/petty-cache?branch=main)
 [![npm version](https://img.shields.io/npm/v/petty-cache)](https://www.npmjs.com/package/petty-cache)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
