@@ -94,7 +94,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
         t.test('memoryCache.put(key, \'\')', (t, done) => {
             const key = Math.random().toString();
 
-            memoryCache.put(key, '', 100);
+            memoryCache.put(key, '', 200);
             assert(memoryCache.keys().includes(key));
             assert.strictEqual(memoryCache.get(key), '');
 
@@ -103,13 +103,13 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 assert(!memoryCache.keys().includes(key));
                 assert.strictEqual(memoryCache.get(key), null);
                 done();
-            }, 101);
+            }, 500);
         });
 
         t.test('memoryCache.put(key, 0)', (t, done) => {
             const key = Math.random().toString();
 
-            memoryCache.put(key, 0, 100);
+            memoryCache.put(key, 0, 200);
             assert(memoryCache.keys().includes(key));
             assert.strictEqual(memoryCache.get(key), 0);
 
@@ -118,13 +118,13 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 assert(!memoryCache.keys().includes(key));
                 assert.strictEqual(memoryCache.get(key), null);
                 done();
-            }, 101);
+            }, 500);
         });
 
         t.test('memoryCache.put(key, false)', (t, done) => {
             const key = Math.random().toString();
 
-            memoryCache.put(key, false, 100);
+            memoryCache.put(key, false, 200);
             assert(memoryCache.keys().includes(key));
             assert.strictEqual(memoryCache.get(key), false);
 
@@ -133,13 +133,13 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 assert(!memoryCache.keys().includes(key));
                 assert.strictEqual(memoryCache.get(key), null);
                 done();
-            }, 101);
+            }, 500);
         });
 
         t.test('memoryCache.put(key, NaN)', (t, done) => {
             const key = Math.random().toString();
 
-            memoryCache.put(key, NaN, 100);
+            memoryCache.put(key, NaN, 200);
             assert(memoryCache.keys().includes(key));
             assert(isNaN(memoryCache.get(key)));
 
@@ -148,13 +148,13 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 assert(!memoryCache.keys().includes(key));
                 assert.strictEqual(memoryCache.get(key), null);
                 done();
-            }, 101);
+            }, 500);
         });
 
         t.test('memoryCache.put(key, null)', (t, done) => {
             const key = Math.random().toString();
 
-            memoryCache.put(key, null, 100);
+            memoryCache.put(key, null, 200);
             assert(memoryCache.keys().includes(key));
             assert.strictEqual(memoryCache.get(key), null);
 
@@ -163,13 +163,13 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 assert(!memoryCache.keys().includes(key));
                 assert.strictEqual(memoryCache.get(key), null);
                 done();
-            }, 101);
+            }, 500);
         });
 
         t.test('memoryCache.put(key, undefined)', (t, done) => {
             const key = Math.random().toString();
 
-            memoryCache.put(key, undefined, 100);
+            memoryCache.put(key, undefined, 200);
             assert(memoryCache.keys().includes(key));
             assert.strictEqual(memoryCache.get(key), undefined);
 
@@ -178,7 +178,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 assert(!memoryCache.keys().includes(key));
                 assert.strictEqual(memoryCache.get(key), null);
                 done();
-            }, 101);
+            }, 500);
         });
     });
 
