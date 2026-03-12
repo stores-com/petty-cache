@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-03-12
+### Changed
+- Added the ability for `pettyCache.bulkGet`, `pettyCache.bulkSet`, and `pettyCache.bulkFetch` functions to support callbacks and promises.
+
 ## [3.6.0] - 2026-02-12
 ### Changed
 - Added the ability for `pettyCache.get`, `pettyCache.set`, and `pettyCache.patch` functions to support callbacks and promises.

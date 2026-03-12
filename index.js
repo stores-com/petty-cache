@@ -3,6 +3,11 @@ const lock = require('lock').Lock();
 const memoryCache = require('memory-cache');
 const redis = require('redis');
 
+/**
+ * Creates a new PettyCache instance backed by Redis.
+ * Accepts the same arguments as redis.createClient(), or an existing RedisClient instance.
+ * @param {...*} args - Either a RedisClient instance, or arguments forwarded to redis.createClient().
+ */
 function PettyCache() {
     const intervals = {};
     let redisClient;
@@ -16,6 +21,11 @@ function PettyCache() {
     //eslint-disable-next-line no-console
     redisClient.on('error', err => console.warn(`Warning: Redis reported a client error: ${err}`));
 
+    /**
+     * Fetches multiple keys from Redis.
+     * @param {string[]} keys
+     * @param {Function} callback - callback(err, values) where values maps each key to {exists, value}.
+     */
     function bulkGetFromRedis(keys, callback) {
         // Try to get values from Redis
         redisClient.mget(keys, (err, data) => {
@@ -41,6 +51,11 @@ function PettyCache() {
         });
     }
 
+    /**
+     * Fetches a single key from the in-process memory cache.
+     * @param {string} key
+     * @returns {{exists: boolean, value: *}}
+     */
     function getFromMemoryCache(key) {
         // Try to get value from memory cache
         const value = memoryCache.get(key);
@@ -59,6 +74,11 @@ function PettyCache() {
         return { exists: false };
     }
 
+    /**
+     * Fetches a single key from Redis.
+     * @param {string} key
+     * @param {Function} callback - callback(err, {exists, value}).
+     */
     function getFromRedis(key, callback) {
         // Try to get value from Redis
         redisClient.get(key, (err, data) => {
@@ -75,6 +95,12 @@ function PettyCache() {
         });
     }
 
+    /**
+     * Resolves TTL options into a {min, max} object in milliseconds. Defaults to 30–60 seconds.
+     * @param {Object} options
+     * @param {number|Object} [options.ttl] - Fixed ms value, or an object with min/max properties.
+     * @returns {{min: number, max: number}}
+     */
     function getTtl(options) {
         // Default TTL is 30-60 seconds
         const ttl = {
@@ -101,159 +127,219 @@ function PettyCache() {
     }
 
     /**
-     * @param {Array} keys - An array of keys.
+     * Returns data from cache for each key if available; otherwise executes func for the missing keys
+     * and stores the results in cache before returning. Supports both callback and promise styles.
+     * @param {Array} keys - An array of cache keys.
+     * @param {Function} func - Function called with missing keys and a callback: (keys, callback).
+     * @param {Object} [options] - Optional settings.
+     * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
+     * @param {Function} [callback] - Optional callback(err, values). If omitted, returns a Promise.
+     * @returns {Promise|undefined} Resolves with an object mapping each key to its cached value.
      */
-    this.bulkFetch = (keys, func, options, callback) => {
-        // Options are optional
-        if (!callback) {
+    this.bulkFetch = (keys, func, options = {}, callback) => {
+        if (typeof options === 'function') {
             callback = options;
             options = {};
         }
 
-        // If there aren't any keys, return
-        if (!keys.length) {
-            return callback(null, {});
-        }
-
-        const _keys = Array.from(new Set(keys));
-        const values = {};
-
-        // Try to get values from memory cache
-        for (let i = _keys.length - 1; i >= 0; i--) {
-            const key = _keys[i];
-            const result = getFromMemoryCache(key);
-
-            if (result.exists) {
-                values[key] = result.value;
-                _keys.splice(i, 1);
-            }
-        }
-
-        // If there aren't any keys left, return
-        if (!_keys.length) {
-            return callback(null, values);
-        }
-
-        const _this = this;
-
-        // Try to get values from Redis
-        bulkGetFromRedis(_keys, (err, results) => {
-            if (err) {
-                return callback(err);
-            }
-
-            for (let i = _keys.length - 1; i >= 0; i--) {
-                const key = _keys[i];
-                const result = results[key];
-
-                if (result.exists) {
-                    _keys.splice(i, 1);
-                    values[key] = result.value;
-
-                    // Store value in memory cache with a short expiration
-                    memoryCache.put(key, result.value, random(2000, 5000));
-                }
-            }
-
-            // If there aren't any keys left, return
-            if (!_keys.length) {
-                return callback(null, values);
-            }
-
-            // Execute the specified function for remaining keys
-            func(_keys, (err, data) => {
-                if (err) {
-                    return callback(err);
+        const executor = () => {
+            return new Promise((resolve, reject) => {
+                // If there aren't any keys, return
+                if (!keys.length) {
+                    return resolve({});
                 }
 
-                Object.keys(data).forEach(key => values[key] = data[key]);
+                const _keys = Array.from(new Set(keys));
+                const values = {};
 
-                _this.bulkSet(data, options, err => callback(err, values));
+                // Try to get values from memory cache
+                for (let i = _keys.length - 1; i >= 0; i--) {
+                    const key = _keys[i];
+                    const result = getFromMemoryCache(key);
+
+                    if (result.exists) {
+                        values[key] = result.value;
+                        _keys.splice(i, 1);
+                    }
+                }
+
+                // If there aren't any keys left, return
+                if (!_keys.length) {
+                    return resolve(values);
+                }
+
+                // Try to get values from Redis
+                bulkGetFromRedis(_keys, (err, results) => {
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    for (let i = _keys.length - 1; i >= 0; i--) {
+                        const key = _keys[i];
+                        const result = results[key];
+
+                        if (result.exists) {
+                            _keys.splice(i, 1);
+                            values[key] = result.value;
+
+                            // Store value in memory cache with a short expiration
+                            memoryCache.put(key, result.value, random(2000, 5000));
+                        }
+                    }
+
+                    // If there aren't any keys left, return
+                    if (!_keys.length) {
+                        return resolve(values);
+                    }
+
+                    // Execute the specified function for remaining keys
+                    func(_keys, (err, data) => {
+                        if (err) {
+                            return reject(err);
+                        }
+
+                        Object.keys(data).forEach(key => values[key] = data[key]);
+
+                        this.bulkSet(data, options, err => {
+                            if (err) {
+                                return reject(err);
+                            }
+
+                            resolve(values);
+                        });
+                    });
+                });
             });
-        });
+        };
+
+        if (callback) {
+            executor().then(result => callback(null, result)).catch(callback);
+        } else {
+            return executor();
+        }
     };
 
     /**
-     * @param {Array} keys - An array of keys.
+     * Gets cached values for an array of keys. Supports both callback and promise styles.
+     * @param {Array} keys - An array of cache keys.
+     * @param {Function} [callback] - Optional callback(err, values). If omitted, returns a Promise.
+     * @returns {Promise|undefined} Resolves with an object mapping each key to its value, or null if not found.
      */
     this.bulkGet = (keys, callback) => {
-        // If there aren't any keys, return
-        if (!keys.length) {
-            return callback(null, {});
-        }
-
-        const _keys = Array.from(new Set(keys));
-        const values = {};
-
-        // Try to get values from memory cache
-        for (let i = _keys.length - 1; i >= 0; i--) {
-            const key = _keys[i];
-            const result = getFromMemoryCache(key);
-
-            if (result.exists) {
-                values[key] = result.value;
-                _keys.splice(i, 1);
-            }
-        }
-
-        // If there aren't any keys left, return
-        if (!_keys.length) {
-            return callback(null, values);
-        }
-
-        // Try to get values from Redis
-        bulkGetFromRedis(_keys, (err, results) => {
-            if (err) {
-                return callback(err);
-            }
-
-            for (let i = 0; i < _keys.length; i++) {
-                const key = _keys[i];
-                const result = results[key];
-
-                if (!result.exists) {
-                    values[key] = null;
-                    continue;
+        const executor = () => {
+            return new Promise((resolve, reject) => {
+                // If there aren't any keys, return
+                if (!keys.length) {
+                    return resolve({});
                 }
 
-                values[key] = result.value;
+                const _keys = Array.from(new Set(keys));
+                const values = {};
 
-                // Store value in memory cache with a short expiration
-                memoryCache.put(key, result.value, random(2000, 5000));
-            }
+                // Try to get values from memory cache
+                for (let i = _keys.length - 1; i >= 0; i--) {
+                    const key = _keys[i];
+                    const result = getFromMemoryCache(key);
 
-            callback(null, values);
-        });
+                    if (result.exists) {
+                        values[key] = result.value;
+                        _keys.splice(i, 1);
+                    }
+                }
+
+                // If there aren't any keys left, return
+                if (!_keys.length) {
+                    return resolve(values);
+                }
+
+                // Try to get values from Redis
+                bulkGetFromRedis(_keys, (err, results) => {
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    for (let i = 0; i < _keys.length; i++) {
+                        const key = _keys[i];
+                        const result = results[key];
+
+                        if (!result.exists) {
+                            values[key] = null;
+                            continue;
+                        }
+
+                        values[key] = result.value;
+
+                        // Store value in memory cache with a short expiration
+                        memoryCache.put(key, result.value, random(2000, 5000));
+                    }
+
+                    resolve(values);
+                });
+            });
+        };
+
+        if (callback) {
+            executor().then(result => callback(null, result)).catch(callback);
+        } else {
+            return executor();
+        }
     };
 
-    this.bulkSet = (values, options, callback) => {
-        // Options are optional
-        if (!callback) {
+    /**
+     * Sets multiple key/value pairs in cache simultaneously. Supports both callback and promise styles.
+     * @param {Object} values - An object mapping cache keys to their values.
+     * @param {Object} [options] - Optional settings.
+     * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
+     * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
+     * @returns {Promise|undefined}
+     */
+    this.bulkSet = (values, options = {}, callback) => {
+        if (typeof options === 'function') {
             callback = options;
             options = {};
         }
 
-        // Get TTL based on specified options
-        const ttl = getTtl(options);
+        const executor = () => {
+            return new Promise((resolve, reject) => {
+                // Get TTL based on specified options
+                const ttl = getTtl(options);
 
-        // Redis does not have a MSETEX command so we batch commands: http://redis.js.org/#api-clientbatchcommands
-        const batch = redisClient.batch();
+                // Redis does not have a MSETEX command so we batch commands: http://redis.js.org/#api-clientbatchcommands
+                const batch = redisClient.batch();
 
-        Object.keys(values).forEach(key => {
-            const value = values[key];
+                Object.keys(values).forEach(key => {
+                    const value = values[key];
 
-            // Store value in memory cache with a short expiration
-            memoryCache.put(key, value, random(2000, 5000));
+                    // Store value in memory cache with a short expiration
+                    memoryCache.put(key, value, random(2000, 5000));
 
-            // Add Redis command
-            batch.psetex(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
-        });
+                    // Add Redis command
+                    batch.psetex(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
+                });
 
-        batch.exec((err) => {
-            callback(err);
-        });
+                batch.exec((err) => {
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    resolve();
+                });
+            });
+        };
+
+        if (callback) {
+            executor().then(result => callback(null, result)).catch(callback);
+        } else {
+            return executor();
+        }
     };
 
+    /**
+     * Deletes a key from both the memory cache and Redis. Supports both callback and promise styles.
+     * @param {string} key - The cache key to delete.
+     * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
+     * @returns {Promise|undefined}
+     */
     this.del = (key, callback) => {
         const executor = () => {
             return new Promise((resolve, reject) => {
@@ -275,11 +361,16 @@ function PettyCache() {
         }
     };
 
-    // Returns data from cache if available;
-    // otherwise executes the specified function and places the results in cache before returning the data.
-    this.fetch = (key, func, options, callback) => {
-        options = options || {};
-
+    /**
+     * Returns data from cache if available; otherwise executes func, stores the result, and returns it.
+     * Uses double-checked locking to prevent cache stampedes. Supports async and callback func signatures.
+     * @param {string} key - The cache key.
+     * @param {Function} func - Called on cache miss. Use func(callback) for callbacks or async func() for promises.
+     * @param {Object} [options] - Optional settings.
+     * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
+     * @param {Function} [callback] - Optional callback(err, value). Defaults to a noop.
+     */
+    this.fetch = (key, func, options = {}, callback) => {
         if (typeof options === 'function') {
             callback = options;
             options = {};
@@ -388,9 +479,16 @@ function PettyCache() {
         });
     };
 
-    this.fetchAndRefresh = (key, func, options, callback) => {
-        options = options || {};
-
+    /**
+     * Like fetch(), but also sets up a background interval to proactively refresh the cached value
+     * before it expires, preventing cache misses under sustained load.
+     * @param {string} key - The cache key.
+     * @param {Function} func - Called on cache miss and on each refresh interval: func(callback).
+     * @param {Object} [options] - Optional settings.
+     * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
+     * @param {Function} [callback] - Optional callback(err, value). Defaults to a noop.
+     */
+    this.fetchAndRefresh = (key, func, options = {}, callback) => {
         if (typeof options === 'function') {
             callback = options;
             options = {};
@@ -429,6 +527,12 @@ function PettyCache() {
         this.fetch(key, func, options, callback);
     };
 
+    /**
+     * Gets a cached value. Supports both callback and promise styles.
+     * @param {string} key - The cache key.
+     * @param {Function} [callback] - Optional callback(err, value). If omitted, returns a Promise.
+     * @returns {Promise|undefined} Resolves with the cached value, or null if not found.
+     */
     this.get = (key, callback) => {
         const executor = () => {
             return new Promise((resolve, reject) => {
@@ -482,14 +586,23 @@ function PettyCache() {
     };
 
     this.mutex = {
-        lock: (key, options, callback) => {
+        /**
+         * Acquires a distributed mutex lock in Redis. Supports both callback and promise styles.
+         * @param {string} key - The lock key.
+         * @param {Object} [options] - Optional settings.
+         * @param {number} [options.ttl=1000] - Lock TTL in ms.
+         * @param {Object} [options.retry] - Retry options.
+         * @param {number} [options.retry.times=1] - Number of acquisition attempts.
+         * @param {number} [options.retry.interval=100] - Delay between retries in ms.
+         * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
+         * @returns {Promise|undefined}
+         */
+        lock: (key, options = {}, callback) => {
             // Options are optional
             if (!callback && typeof options === 'function') {
                 callback = options;
                 options = {};
             }
-
-            options = options || {};
 
             options.retry = Object.hasOwn(options, 'retry') ? options.retry : {};
             options.retry.interval = Object.hasOwn(options.retry, 'interval') ? options.retry.interval : 100;
@@ -530,6 +643,12 @@ function PettyCache() {
                 return executor();
             }
         },
+        /**
+         * Releases a distributed mutex lock in Redis. Supports both callback and promise styles.
+         * @param {string} key - The lock key to release.
+         * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
+         * @returns {Promise|undefined}
+         */
         unlock: (key, callback) => {
             const executor = () => {
                 return new Promise((resolve, reject) => {
@@ -551,13 +670,21 @@ function PettyCache() {
         }
     };
 
-    this.patch = (key, value, options, callback) => {
+    /**
+     * Updates specific properties of a cached object without replacing the whole value.
+     * Supports both callback and promise styles.
+     * @param {string} key - The cache key of the object to patch.
+     * @param {Object} value - Properties to merge into the cached object.
+     * @param {Object} [options] - Optional settings passed to set().
+     * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
+     * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
+     * @returns {Promise|undefined}
+     */
+    this.patch = (key, value, options = {}, callback) => {
         if (!callback && typeof options === 'function') {
             callback = options;
             options = {};
         }
-
-        options = options || {};
 
         const _this = this;
 
@@ -595,14 +722,22 @@ function PettyCache() {
     };
 
     this.semaphore = {
-        acquireLock: (key, options, callback) => {
+        /**
+         * Acquires a slot in an existing semaphore pool. Retries if no slot is currently available.
+         * @param {string} key - The semaphore key.
+         * @param {Object} [options] - Optional settings.
+         * @param {number} [options.ttl=1000] - Slot TTL in ms; expired slots may be reclaimed.
+         * @param {Object} [options.retry] - Retry options.
+         * @param {number} [options.retry.times=1] - Number of acquisition attempts.
+         * @param {number} [options.retry.interval=100] - Delay between retries in ms.
+         * @param {Function} callback - callback(err, index) where index is the acquired slot number.
+         */
+        acquireLock: (key, options = {}, callback) => {
             // Options are optional
             if (!callback && typeof options === 'function') {
                 callback = options;
                 options = {};
             }
-
-            options = options || {};
 
             options.retry = Object.prototype.hasOwnProperty.call(options, 'retry') ? options.retry : {};
             options.retry.interval = Object.prototype.hasOwnProperty.call(options.retry, 'interval') ? options.retry.interval : 100;
@@ -656,6 +791,13 @@ function PettyCache() {
                 });
             }, callback);
         },
+        /**
+         * Permanently consumes a semaphore slot, marking it consumed rather than available.
+         * Ensures at least one slot always remains non-consumed.
+         * @param {string} key - The semaphore key.
+         * @param {number} index - The slot index to consume.
+         * @param {Function} [callback] - Optional callback(err). Defaults to a noop.
+         */
         consumeLock: (key, index, callback) => {
             callback = callback || (() => {});
 
@@ -702,6 +844,12 @@ function PettyCache() {
                 });
             });
         },
+        /**
+         * Increases the size of an existing semaphore pool. Cannot shrink a pool.
+         * @param {string} key - The semaphore key.
+         * @param {number} size - The desired pool size (must be >= current size).
+         * @param {Function} [callback] - Optional callback(err). Defaults to a noop.
+         */
         expand: (key, size, callback) => {
             callback = callback || (() => {});
 
@@ -745,6 +893,12 @@ function PettyCache() {
                 });
             });
         },
+        /**
+         * Releases an acquired semaphore slot, marking it available again.
+         * @param {string} key - The semaphore key.
+         * @param {number} index - The slot index to release.
+         * @param {Function} [callback] - Optional callback(err). Defaults to a noop.
+         */
         releaseLock: (key, index, callback) => {
             callback = callback || (() => {});
 
@@ -786,6 +940,11 @@ function PettyCache() {
                 });
             });
         },
+        /**
+         * Resets all slots in an existing semaphore pool to available.
+         * @param {string} key - The semaphore key.
+         * @param {Function} [callback] - Optional callback(err, pool). Defaults to a noop.
+         */
         reset: (key, callback) => {
             callback = callback || (() => {});
 
@@ -822,7 +981,14 @@ function PettyCache() {
                 });
             });
         },
-        retrieveOrCreate: (key, options, callback) => {
+        /**
+         * Retrieves an existing semaphore pool, or creates one if it doesn't exist.
+         * @param {string} key - The semaphore key.
+         * @param {Object} [options] - Optional settings.
+         * @param {number|Function} [options.size=1] - Pool size, or a function(callback) that resolves the size.
+         * @param {Function} [callback] - Optional callback(err, pool). Defaults to a noop.
+         */
+        retrieveOrCreate: (key, options = {}, callback) => {
             // Options are optional
             if (!callback && typeof options === 'function') {
                 callback = options;
@@ -830,7 +996,6 @@ function PettyCache() {
             }
 
             callback = callback || (() => {});
-            options = options || {};
 
             const _this = this;
 
@@ -881,9 +1046,16 @@ function PettyCache() {
         }
     };
 
-    this.set = (key, value, options, callback) => {
-        options = options || {};
-
+    /**
+     * Stores a value in both the memory cache and Redis. Supports both callback and promise styles.
+     * @param {string} key - The cache key.
+     * @param {*} value - The value to cache.
+     * @param {Object} [options] - Optional settings.
+     * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
+     * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
+     * @returns {Promise|undefined}
+     */
+    this.set = (key, value, options = {}, callback) => {
         if (typeof options === 'function') {
             callback = options;
             options = {};
@@ -921,6 +1093,12 @@ function PettyCache() {
     }
 }
 
+/**
+ * Returns a random integer between min and max, inclusive.
+ * @param {number} min
+ * @param {number} max
+ * @returns {number}
+ */
 function random(min, max) {
     if (min === max) {
         return min;
@@ -929,6 +1107,11 @@ function random(min, max) {
     return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
+/**
+ * Parses a JSON string produced by PettyCache.stringify(), restoring NaN, null, and undefined.
+ * @param {string} text
+ * @returns {*}
+ */
 PettyCache.parse = (text) => {
     return JSON.parse(text, (k, v) => {
         if (v === '__NaN') {
@@ -943,6 +1126,12 @@ PettyCache.parse = (text) => {
     });
 };
 
+/**
+ * Serializes a value to JSON, encoding NaN, null, and undefined as sentinel strings
+ * so they survive a Redis round-trip and can be restored by PettyCache.parse().
+ * @param {*} value
+ * @returns {string}
+ */
 PettyCache.stringify = (value) => {
     return JSON.stringify(value, (k, v) => {
         if (typeof v === 'number' && isNaN(v)) {
