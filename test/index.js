@@ -295,6 +295,48 @@ test('petty-cache', { concurrency: true }, async (t) => {
             });
         });
 
+        t.test('PettyCache.bulkFetch should return values (promises)', async () => {
+            const key1 = Math.random().toString();
+            const key2 = Math.random().toString();
+
+            await pettyCache.set(key1, '1');
+
+            const values = await pettyCache.bulkFetch([key1, key2], (keys, callback) => {
+                const data = {};
+                data[key2] = '2';
+                callback(null, data);
+            });
+
+            assert.strictEqual(values[key1], '1');
+            assert.strictEqual(values[key2], '2');
+        });
+
+        t.test('PettyCache.bulkFetch should return empty object when no keys are passed (promises)', async () => {
+            const values = await pettyCache.bulkFetch([], () => {
+                throw new Error('This function should not be called');
+            });
+            assert.deepEqual(values, {});
+        });
+
+        t.test('PettyCache.bulkFetch should reject if func returns error (promises)', async () => {
+            await assert.rejects(
+                pettyCache.bulkFetch([Math.random().toString()], (keys, callback) => {
+                    callback(new Error('PettyCache.bulkFetch should reject if func returns error'));
+                }),
+                { message: 'PettyCache.bulkFetch should reject if func returns error' }
+            );
+        });
+
+        t.test('PettyCache.bulkFetch should return values with options (promises)', async () => {
+            const key = Math.random().toString();
+            const values = await pettyCache.bulkFetch([key], (keys, callback) => {
+                const result = {};
+                keys.forEach(k => { result[k] = 'value'; });
+                callback(null, result);
+            }, { ttl: 6000 });
+            assert.deepEqual(values, { [key]: 'value' });
+        });
+
         t.test('PettyCache.bulkFetch should run func again after TTL', (t, done) => {
             const keys = [Math.random().toString(), Math.random().toString()];
             let numberOfFuncCalls = 0;
@@ -505,6 +547,34 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 done();
             });
         });
+
+        t.test('PettyCache.bulkGet should return values (promises)', async () => {
+            const key1 = Math.random().toString();
+            const key2 = Math.random().toString();
+
+            await pettyCache.set(key1, '1');
+            await pettyCache.set(key2, '2');
+
+            const values = await pettyCache.bulkGet([key1, key2]);
+            assert.strictEqual(values[key1], '1');
+            assert.strictEqual(values[key2], '2');
+        });
+
+        t.test('PettyCache.bulkGet should return null for missing keys (promises)', async () => {
+            const key1 = Math.random().toString();
+            const key2 = Math.random().toString();
+
+            await pettyCache.set(key1, '1');
+
+            const values = await pettyCache.bulkGet([key1, key2]);
+            assert.strictEqual(values[key1], '1');
+            assert.strictEqual(values[key2], null);
+        });
+
+        t.test('PettyCache.bulkGet should return empty object when no keys are passed (promises)', async () => {
+            const values = await pettyCache.bulkGet([]);
+            assert.deepEqual(values, {});
+        });
     });
 
     t.test('PettyCache.bulkSet', { concurrency: true }, async (t) => {
@@ -698,6 +768,31 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 });
             });
         });
+
+        t.test('PettyCache.bulkSet should set values (promises)', async () => {
+            const key1 = Math.random().toString();
+            const key2 = Math.random().toString();
+            const values = {};
+
+            values[key1] = '1';
+            values[key2] = 2;
+
+            await pettyCache.bulkSet(values);
+
+            assert.strictEqual(await pettyCache.get(key1), '1');
+            assert.strictEqual(await pettyCache.get(key2), 2);
+        });
+
+        t.test('PettyCache.bulkSet should set values with options (promises)', async () => {
+            const key1 = Math.random().toString();
+            const values = {};
+
+            values[key1] = 'hello';
+
+            await pettyCache.bulkSet(values, { ttl: 10000 });
+
+            assert.strictEqual(await pettyCache.get(key1), 'hello');
+        });
     });
 
     t.test('PettyCache.del', { concurrency: true }, async (t) => {
@@ -748,6 +843,16 @@ test('petty-cache', { concurrency: true }, async (t) => {
                     });
                 });
             });
+        });
+
+        t.test('PettyCache.del (promises)', async () => {
+            const key = Math.random().toString();
+
+            await pettyCache.set(key, 'value');
+            assert.strictEqual(await pettyCache.get(key), 'value');
+
+            await pettyCache.del(key);
+            assert.strictEqual(await pettyCache.get(key), null);
         });
     });
 
@@ -1313,7 +1418,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
             });
         });
 
-        t.test('PettyCache.mutex.unlock (promises)', async (t) => {
+        t.test('PettyCache.mutex.unlock (promises)', { concurrency: true }, async (t) => {
             t.test('PettyCache.mutex.unlock should unlock', async () => {
                 const key = Math.random().toString();
 
@@ -1384,6 +1489,15 @@ test('petty-cache', { concurrency: true }, async (t) => {
 
         t.test('PettyCache.patch should reject if the key does not exist (promises)', async () => {
             await assert.rejects(() => pettyCache.patch(Math.random().toString(), { b: 3 }), { message: /does not exist/ });
+        });
+
+        t.test('PettyCache.patch should update the values of given object keys with options (promises)', async () => {
+            const key = Math.random().toString();
+
+            await pettyCache.set(key, { a: 1, b: 2, c: 3 });
+            await pettyCache.patch(key, { b: 4, c: 5 }, { ttl: 6000 });
+            const data = await pettyCache.get(key);
+            assert.deepEqual(data, { a: 1, b: 4, c: 5 });
         });
     });
 
@@ -1473,7 +1587,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
             t.test('should fail if the semaphore does not exist', (t, done) => {
                 const key = Math.random().toString();
 
-                pettyCache.semaphore.acquireLock(key, 0, (err) => {
+                pettyCache.semaphore.acquireLock(key, {}, (err) => {
                     assert(err);
                     assert.strictEqual(err.message, `Semaphore ${key} doesn't exist.`);
                     done();
@@ -2407,7 +2521,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
         });
     });
 
-    t.test('Benchmark', async (t) => {
+    t.test('Benchmark', { concurrency: true }, async (t) => {
         const emojis = require('./emojis.json');
 
         t.test('PettyCache should be faster than node-redis', (t, done) => {
@@ -2529,6 +2643,57 @@ test('PettyCache.bulkGet should return error if Redis MGET fails', (t, done) => 
 
         assert(err);
         assert.strictEqual(err.message, 'Redis MGET error');
+
+        done();
+    });
+});
+
+test('PettyCache.bulkSet should return error if Redis batch exec fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalBatch = stubClient.batch.bind(stubClient);
+
+    stubClient.batch = () => {
+        const batch = originalBatch();
+        batch.exec = (callback) => callback(new Error('Redis EXEC error'));
+        return batch;
+    };
+
+    const pettyCache = new PettyCache(stubClient);
+    const values = {};
+    values[Math.random().toString()] = 'value';
+
+    pettyCache.bulkSet(values, (err) => {
+        stubClient.batch = originalBatch;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis EXEC error');
+
+        done();
+    });
+});
+
+test('PettyCache.bulkFetch should return error if bulkSet fails', (t, done) => {
+    const stubClient = redis.createClient();
+    const originalBatch = stubClient.batch.bind(stubClient);
+
+    stubClient.batch = () => {
+        const batch = originalBatch();
+        batch.exec = (callback) => callback(new Error('Redis EXEC error'));
+        return batch;
+    };
+
+    const pettyCache = new PettyCache(stubClient);
+    const key = Math.random().toString();
+
+    pettyCache.bulkFetch([key], (keys, callback) => {
+        const data = {};
+        data[keys[0]] = 'value';
+        callback(null, data);
+    }, (err) => {
+        stubClient.batch = originalBatch;
+
+        assert(err);
+        assert.strictEqual(err.message, 'Redis EXEC error');
 
         done();
     });
