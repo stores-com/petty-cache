@@ -25,6 +25,12 @@ jobs:
     - name: Lint
       run: npx eslint .
 
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
     - name: Setup Redis ${{ env.REDIS_VERSION }}
       uses: supercharge/redis-github-action@v2
       with:
@@ -45,8 +51,8 @@ jobs:
       name: Send Slack notification
       run: |
         # Set common variables
-        COMMIT_AUTHOR=$(git log -1 --format='%an' ${{ github.sha }} | sed "s/'/'\\\\''/g")
-        COMMIT_MSG=$(git log -1 --pretty=format:%s ${{ github.sha }} | sed "s/'/'\\\\''/g" | head -c 100)
+        COMMIT_AUTHOR=$(git log -1 --format='%an' ${{ github.sha }} | sed "s/'/'\''/g")
+        COMMIT_MSG=$(git log -1 --pretty=format:%s ${{ github.sha }} | sed "s/'/'\''/g" | head -c 100)
         COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
         GH_RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
@@ -72,7 +78,10 @@ jobs:
               },
               {
                 "text": {
-                  "text": "*Author:* '"${COMMIT_AUTHOR}"'\n*Branch:* ${{ github.ref_name }}\n*Commit:* <'"${COMMIT_URL}"'|'"${SHORT_SHA}"'>\n*Message:* '"${COMMIT_MSG}"'",
+                  "text": "*Author:* '"${COMMIT_AUTHOR}"'
+*Branch:* ${{ github.ref_name }}
+*Commit:* <'"${COMMIT_URL}"'|'"${SHORT_SHA}"'>
+*Message:* '"${COMMIT_MSG}"'",
                   "type": "mrkdwn"
                 },
                 "type": "section"
