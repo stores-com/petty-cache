@@ -1,3 +1,6 @@
+const crypto = require('node:crypto');
+const timers = require('node:timers/promises');
+
 const async = require('async');
 const lock = require('lock').Lock();
 const memoryCache = require('memory-cache');
@@ -335,6 +338,104 @@ function PettyCache() {
     };
 
     /**
+     * Distributed debounce: invokes `fn` once `wait` ms have elapsed since the last
+     * call for the given key, coalescing across multiple processes via Redis. Each call
+     * resets the wait window — `fn` does not run until calls stop arriving for `wait` ms.
+     *
+     * Mechanic: each call writes a unique id to the key (no TTL) and schedules a
+     * local setTimeout for `wait` ms. When the timeout fires, the call acquires a
+     * distributed mutex on the key, reads it, and only invokes `fn` if the id still
+     * matches its own — meaning no later call superseded it. The mutex is held for the
+     * duration of `fn` so concurrent fires are serialized.
+     *
+     * The returned Promise resolves immediately after the id is written — `fn` runs
+     * detached from the caller. Errors thrown by `fn` are re-thrown on `process.nextTick`
+     * so they surface via `unhandledRejection` / APM.
+     *
+     * Note on durability: the deferred execution is held in-process via `setTimeout`. If
+     * the most-recent caller's process dies before its timer fires, the work is lost.
+     * Callers that need crash-resilient deferred execution should layer a periodic
+     * safety-net job or use a durable scheduler outside this primitive.
+     *
+     * @param {string} key - The Redis key. Callers compose their own naming convention.
+     * @param {Object} options
+     * @param {number} options.wait - Quiet-period required before `fn` fires, in ms.
+     * @param {Function} fn - Async function invoked once after `wait` ms of no further
+     *                        calls. Runs detached from the returned Promise.
+     * @returns {Promise<void>} - Resolves immediately after the id is written.
+     */
+    this.debounce = async (key, options, fn) => {
+        const wait = Object.hasOwn(options, 'wait') ? options.wait : 5000;
+        const id = crypto.randomUUID();
+        const mutexKey = `mutex:${key}`;
+        const ttl = wait * 2;
+
+        // Write our id with a TTL of 2× wait. SET overwrites any prior value, resetting
+        // the debounce timer for any in-flight setTimeouts that will see a non-matching
+        // id on read. The TTL prevents abandoned keys from accumulating in Redis when a
+        // process dies between the SET and the setTimeout firing.
+        await new Promise((resolve, reject) => {
+            redisClient.set(key, id, 'PX', ttl, (err) => {
+                if (err) {
+                    return reject(err);
+                }
+
+                resolve();
+            });
+        });
+
+        // Detached fire-after-wait — caller's Promise resolves once the id is written above
+        (async () => {
+            await timers.setTimeout(wait);
+
+            // Retry generously — when many calls fire near-simultaneously, the mutex is
+            // held briefly by each in turn (just GET+DEL+fn). Waiting it out is correct;
+            // immediate failure would silently lose our chance to fire even though we
+            // may be the most recent id. If we still can't acquire after retries, treat
+            // it as "another fire is in progress" and skip silently.
+            try {
+                const interval = Math.max(Math.floor(wait / 100), 1);
+                const times = Math.ceil(ttl / interval);
+
+                await this.mutex.lock(mutexKey, { retry: { interval, times }, ttl });
+            } catch {
+                return;
+            }
+
+            try {
+                const currentId = await new Promise((resolve, reject) => {
+                    redisClient.get(key, (err, val) => {
+                        if (err) {
+                            return reject(err);
+                        }
+
+                        resolve(val);
+                    });
+                });
+
+                // A later call superseded ours — its detached fire will handle it
+                if (currentId !== id) {
+                    return;
+                }
+
+                await new Promise((resolve, reject) => {
+                    redisClient.del(key, (err) => {
+                        if (err) {
+                            return reject(err);
+                        }
+
+                        resolve();
+                    });
+                });
+
+                await fn();
+            } finally {
+                await this.mutex.unlock(mutexKey);
+            }
+        })().catch(err => process.nextTick(() => { throw err; }));
+    };
+
+    /**
      * Deletes a key from both the memory cache and Redis. Supports both callback and promise styles.
      * @param {string} key - The cache key to delete.
      * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
@@ -363,7 +464,7 @@ function PettyCache() {
 
     /**
      * Returns data from cache if available; otherwise executes func, stores the result, and returns it.
-     * Uses double-checked locking to prevent cache stampedes. Supports async and callback func signatures.
+     * Uses double-checked locking to prevent cache idedes. Supports async and callback func signatures.
      * @param {string} key - The cache key.
      * @param {Function} func - Called on cache miss. Use func(callback) for callbacks or async func() for promises.
      * @param {Object} [options] - Optional settings.

@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-04-25
+### Added
+- `pettyCache.debounce(key, { wait }, fn)` — distributed debounce primitive. The first caller for a given key in a quiet window invokes `fn`; subsequent calls within the window are no-ops. State is cleared on callback throw so the next caller can retry immediately. Async/await only.
+
 ## [3.7.0] - 2026-03-12
 ### Changed
 - Added the ability for `pettyCache.bulkGet`, `pettyCache.bulkSet`, and `pettyCache.bulkFetch` functions to support callbacks and promises.

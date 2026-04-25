@@ -23,6 +23,9 @@ Functions executed on cache misses are wrapped in double-checked locking (http:/
 **Mutex**
 Provides a distributed lock (mutex) with the ability to retry a specified number of times after a specified interval of time when acquiring a lock.
 
+**Debounce**
+Provides a distributed debounce primitive: the first call within a quiet window invokes the callback; subsequent calls during the window are absorbed. State is cleared on callback throw so the next caller can retry immediately.
+
 **Semaphore**
 Provides a pool of distributed locks with the ability to release a slot back to the pool or remove the slot from the pool so that it's not used again.
 
@@ -384,6 +387,29 @@ pettyCache.mutex.unlock('key', function(err) {
 ```javascript
 await pettyCache.mutex.unlock('key');
 ```
+
+## Debounce
+
+### pettyCache.debounce(key, options, fn)
+
+Distributed debounce: invokes `fn` once `wait` ms have elapsed since the last call for the given key, coalescing across multiple processes via Redis. Each call resets the wait window — `fn` does not run until calls stop arriving for `wait` ms.
+
+The returned Promise resolves immediately after the call is recorded — `fn` runs detached from the caller.
+
+```javascript
+// Three rapid calls; fn runs once, ~5 seconds after the third call
+await pettyCache.debounce('my-key', { wait: 5000 }, async () => doWork());
+await pettyCache.debounce('my-key', { wait: 5000 }, async () => doWork());
+await pettyCache.debounce('my-key', { wait: 5000 }, async () => doWork());
+```
+
+**Parameters**
+
+- `key` (string) — Redis key. Callers compose their own naming convention.
+- `options.wait` (number) — quiet-period required before `fn` fires, in ms.
+- `fn` (async function) — invoked once after `wait` ms of no further calls. Runs detached from the returned Promise.
+
+**Note on durability:** the deferred execution is held in-process via `setTimeout`. If the most-recent caller's process dies before its timer fires, the work is lost. Callers needing crash-resilient deferred execution should layer a periodic safety-net job or use a durable scheduler outside this primitive.
 
 ## Semaphore
 

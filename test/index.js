@@ -856,6 +856,103 @@ test('petty-cache', { concurrency: true }, async (t) => {
         });
     });
 
+    t.test('PettyCache.debounce', { concurrency: false }, async (t) => {
+        t.test('fn runs after wait ms of quiet — not before', async () => {
+            const key = `debounce-${Math.random()}`;
+            let invocations = 0;
+
+            await pettyCache.debounce(key, { wait: 200 }, async () => { invocations += 1; });
+
+            // Has not fired yet
+            assert.strictEqual(invocations, 0);
+
+            // Halfway through the wait — still has not fired
+            await timers.setTimeout(100);
+            assert.strictEqual(invocations, 0);
+
+            // Has fired after wait elapses
+            await timers.setTimeout(200);
+            assert.strictEqual(invocations, 1);
+        });
+
+        t.test('each call resets the timer — fn fires only after the LAST call quiets', async () => {
+            const key = `debounce-${Math.random()}`;
+            let invocations = 0;
+            const fn = async () => { invocations += 1; };
+
+            // t=0: first call schedules fire for t=200
+            await pettyCache.debounce(key, { wait: 200 }, fn);
+            await timers.setTimeout(100);
+
+            // t=100: second call resets the schedule — new fire at t=300
+            await pettyCache.debounce(key, { wait: 200 }, fn);
+            await timers.setTimeout(100);
+
+            // t=200: first call's setTimeout fires; sees superseded stamp; does nothing
+            assert.strictEqual(invocations, 0, 'first call should have been superseded by second');
+
+            // t=200: third call resets again — new fire at t=400
+            await pettyCache.debounce(key, { wait: 200 }, fn);
+            await timers.setTimeout(150);
+
+            // t=350: second call's setTimeout fired at t=300, sees superseded; did nothing
+            assert.strictEqual(invocations, 0, 'second call should have been superseded by third');
+
+            // t=450: third call's setTimeout fires at t=400, sees its own stamp, fires fn
+            await timers.setTimeout(100);
+            assert.strictEqual(invocations, 1, 'fn should have fired exactly once after the last call quieted');
+        });
+
+        t.test('coalesces three rapid calls into one fn invocation', async () => {
+            const key = `debounce-${Math.random()}`;
+            let invocations = 0;
+            const fn = async () => { invocations += 1; };
+
+            await pettyCache.debounce(key, { wait: 200 }, fn);
+            await pettyCache.debounce(key, { wait: 200 }, fn);
+            await pettyCache.debounce(key, { wait: 200 }, fn);
+
+            // Wait for the last timer to fire (allow extra time for mutex contention)
+            await timers.setTimeout(500);
+            assert.strictEqual(invocations, 1);
+        });
+
+        t.test('after fn fires, a new debounce on the same key works again', async () => {
+            const key = `debounce-${Math.random()}`;
+            let invocations = 0;
+
+            await pettyCache.debounce(key, { wait: 100 }, async () => { invocations += 1; });
+            await timers.setTimeout(300);
+
+            await pettyCache.debounce(key, { wait: 100 }, async () => { invocations += 1; });
+            await timers.setTimeout(300);
+
+            assert.strictEqual(invocations, 2);
+        });
+
+        t.test('different keys are independent', async () => {
+            const key1 = `debounce-${Math.random()}-1`;
+            const key2 = `debounce-${Math.random()}-2`;
+            const calls = [];
+
+            await pettyCache.debounce(key1, { wait: 100 }, async () => calls.push('1'));
+            await pettyCache.debounce(key2, { wait: 100 }, async () => calls.push('2'));
+
+            await timers.setTimeout(200);
+
+            assert.deepStrictEqual(calls.sort(), ['1', '2']);
+        });
+
+        t.test('debounce returns immediately — caller is not blocked by wait', async () => {
+            const key = `debounce-${Math.random()}`;
+            const startedAt = Date.now();
+
+            await pettyCache.debounce(key, { wait: 5000 }, async () => {});
+
+            assert.ok(Date.now() - startedAt < 200, 'debounce blocked the caller');
+        });
+    });
+
     t.test('PettyCache.fetch', { concurrency: true }, async (t) => {
         t.test('PettyCache.fetch', (t, done) => {
             const key = Math.random().toString();
