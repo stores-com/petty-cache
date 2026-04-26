@@ -1087,6 +1087,45 @@ function PettyCache() {
         }
     };
 
+    /**
+     * Distributed throttle: invokes `fn` only if no other call has claimed the same key
+     * within the last `ttl` milliseconds, coalescing calls across multiple processes via
+     * Redis. The first caller in a window wins the claim and `fn` runs to completion;
+     * subsequent calls within the window are no-ops (they return immediately without
+     * invoking `fn`). After the window's TTL expires, the next caller can claim again.
+     *
+     * The returned Promise resolves only after `fn` has resolved (for the winning caller)
+     * or immediately (for absorbed callers). Errors thrown by `fn` propagate to the
+     * caller — useful for callers that need to know whether the work succeeded so they
+     * can NACK upstream messages, etc.
+     *
+     * @param {string} key - The Redis key. Callers compose their own naming convention.
+     * @param {Object} options
+     * @param {number} options.ttl - Throttle window in milliseconds. Required.
+     * @param {Function} fn - Async function invoked once per window if this caller wins
+     *                        the claim. Awaited before the returned Promise resolves.
+     * @returns {Promise<void>}
+     */
+    this.throttle = async (key, options, fn) => {
+        const ttl = options.ttl;
+
+        const won = await new Promise((resolve, reject) => {
+            redisClient.set(key, '1', 'NX', 'PX', ttl, (err, res) => {
+                if (err) {
+                    return reject(err);
+                }
+
+                resolve(res === 'OK');
+            });
+        });
+
+        if (!won) {
+            return;
+        }
+
+        await fn();
+    };
+
     // Semaphore functions need to be bound to the main PettyCache object
     for (const method in this.semaphore) {
         this.semaphore[method] = this.semaphore[method].bind(this);

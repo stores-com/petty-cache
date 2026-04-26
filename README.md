@@ -26,6 +26,9 @@ Provides a distributed lock (mutex) with the ability to retry a specified number
 **Semaphore**
 Provides a pool of distributed locks with the ability to release a slot back to the pool or remove the slot from the pool so that it's not used again.
 
+**Throttle**
+Provides a distributed throttle: the first caller for a given key in a TTL window invokes the callback; subsequent calls within the window are absorbed. Errors from the callback propagate to the caller.
+
 ## Getting Started
 
 ```javascript
@@ -517,3 +520,25 @@ pettyCache.semaphore.retrieveOrCreate('key', { size: 10 }, function(err) {
     size: 1 || function() { const x = 1 + 1; callback(null, x); } // The number of locks to create in the semaphore's pool. Optionally, size can be a `callback(err, size)` function.
 }
 ```
+
+## Throttle
+
+### pettyCache.throttle(key, options, fn)
+
+Distributed throttle: coalesces calls for the same key across multiple processes via Redis so that `fn` runs at most once per `ttl` window. The first caller in a window wins the claim and `fn` runs to completion; subsequent calls within the window are no-ops. After the window expires, the next caller can claim again.
+
+The returned Promise resolves only after `fn` has resolved (for the winning caller) or immediately (for absorbed callers). Errors thrown by `fn` propagate to the caller — useful for callers that need to know whether the work succeeded.
+
+```javascript
+await pettyCache.throttle('my-key', { ttl: 5 * 60 * 1000 }, async () => {
+    // First caller's work — runs immediately. Subsequent calls within
+    // the next 5 minutes are no-ops.
+    await doWork();
+});
+```
+
+**Parameters**
+
+- `key` (string) — Redis key. Callers compose their own naming convention.
+- `options.ttl` (number) — throttle window in milliseconds. Required.
+- `fn` (async function) — invoked once per window if this caller wins the claim. Awaited before the returned Promise resolves; errors propagate to the caller.

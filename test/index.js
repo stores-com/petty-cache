@@ -2333,6 +2333,83 @@ test('petty-cache', { concurrency: true }, async (t) => {
         });
     });
 
+    t.test('PettyCache.throttle', { concurrency: false }, async (t) => {
+        t.test('first call invokes fn and waits for it to complete', async () => {
+            const key = `throttle-${Math.random()}`;
+            let invocations = 0;
+
+            await pettyCache.throttle(key, { ttl: 1000 }, async () => {
+                await timers.setTimeout(50);
+                invocations += 1;
+            });
+
+            assert.strictEqual(invocations, 1);
+        });
+
+        t.test('subsequent calls within the window are absorbed', async () => {
+            const key = `throttle-${Math.random()}`;
+            const calls = [];
+
+            await pettyCache.throttle(key, { ttl: 1000 }, async () => calls.push('a'));
+            await pettyCache.throttle(key, { ttl: 1000 }, async () => calls.push('b'));
+            await pettyCache.throttle(key, { ttl: 1000 }, async () => calls.push('c'));
+
+            assert.deepStrictEqual(calls, ['a']);
+        });
+
+        t.test('after the window expires, next call wins again', async () => {
+            const key = `throttle-${Math.random()}`;
+            const calls = [];
+
+            await pettyCache.throttle(key, { ttl: 100 }, async () => calls.push('a'));
+            await timers.setTimeout(200);
+            await pettyCache.throttle(key, { ttl: 100 }, async () => calls.push('b'));
+
+            assert.deepStrictEqual(calls, ['a', 'b']);
+        });
+
+        t.test('errors thrown by fn propagate to the caller', async () => {
+            const key = `throttle-${Math.random()}`;
+
+            await assert.rejects(
+                pettyCache.throttle(key, { ttl: 1000 }, async () => { throw new Error('boom'); }),
+                /boom/
+            );
+        });
+
+        t.test('different keys are independent', async () => {
+            const key1 = `throttle-${Math.random()}-1`;
+            const key2 = `throttle-${Math.random()}-2`;
+            const calls = [];
+
+            await pettyCache.throttle(key1, { ttl: 1000 }, async () => calls.push('1'));
+            await pettyCache.throttle(key2, { ttl: 1000 }, async () => calls.push('2'));
+
+            assert.deepStrictEqual(calls, ['1', '2']);
+        });
+
+        t.test('absorbed callers return immediately without waiting on fn', async () => {
+            const key = `throttle-${Math.random()}`;
+
+            // First caller wins; fn takes 200ms
+            const winner = pettyCache.throttle(key, { ttl: 1000 }, async () => {
+                await timers.setTimeout(200);
+            });
+
+            // Brief pause to ensure the SETNX lands
+            await timers.setTimeout(20);
+
+            // Second caller is absorbed; should resolve quickly
+            const start = Date.now();
+            await pettyCache.throttle(key, { ttl: 1000 }, async () => {
+                await timers.setTimeout(5000);
+            });
+            assert.ok(Date.now() - start < 100, 'absorbed caller did not return immediately');
+
+            await winner;
+        });
+    });
+
     t.test('redisClient', { concurrency: true }, async (t) => {
         t.test('redisClient.mget(falsy keys)', (t, done) => {
             const key1 = Math.random().toString();
