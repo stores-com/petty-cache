@@ -149,6 +149,12 @@ function PettyCache() {
                     return resolve({});
                 }
 
+                // Limit keys to prevent resource exhaustion (DoS)
+                const MAX_BULK_KEYS = 1000;
+                if (keys.length > MAX_BULK_KEYS) {
+                    return reject(new Error('bulkFetch keys array length exceeds maximum of ' + MAX_BULK_KEYS));
+                }
+
                 const _keys = Array.from(new Set(keys));
                 const values = {};
 
