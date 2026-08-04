@@ -1,7 +1,6 @@
 const timers = require('node:timers/promises');
 const util = require('node:util');
 
-const async = require('async');
 const lock = require('lock').Lock();
 const memoryCache = require('memory-cache');
 const redis = require('redis');
@@ -93,8 +92,10 @@ function PettyCache() {
 
     // Promisify per call rather than once at construction so that wrappers applied to the
     // client's methods later (APM instrumentation, test stubs) are respected
+    const delAsync = (...args) => util.promisify(redisClient.del).apply(redisClient, args);
     const getAsync = (...args) => util.promisify(redisClient.get).apply(redisClient, args);
     const mgetAsync = (...args) => util.promisify(redisClient.mget).apply(redisClient, args);
+    const psetexAsync = (...args) => util.promisify(redisClient.psetex).apply(redisClient, args);
     const setAsync = (...args) => util.promisify(redisClient.set).apply(redisClient, args);
 
     /**
@@ -349,32 +350,24 @@ function PettyCache() {
             options = {};
         }
 
-        const executor = () => {
-            return new Promise((resolve, reject) => {
-                // Get TTL based on specified options
-                const ttl = getTtl(options);
+        const executor = async () => {
+            // Get TTL based on specified options
+            const ttl = getTtl(options);
 
-                // Redis does not have a MSETEX command so we batch commands: http://redis.js.org/#api-clientbatchcommands
-                const batch = redisClient.batch();
+            // Redis does not have a MSETEX command so we batch commands: http://redis.js.org/#api-clientbatchcommands
+            const batch = redisClient.batch();
 
-                Object.keys(values).forEach(key => {
-                    const value = values[key];
+            Object.keys(values).forEach(key => {
+                const value = values[key];
 
-                    // Store value in memory cache with a short expiration
-                    memoryCache.put(key, value, random(2000, 5000));
+                // Store value in memory cache with a short expiration
+                memoryCache.put(key, value, random(2000, 5000));
 
-                    // Add Redis command
-                    batch.psetex(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
-                });
-
-                batch.exec((err) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    resolve();
-                });
+                // Add Redis command
+                batch.psetex(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
             });
+
+            await util.promisify(batch.exec).call(batch);
         };
 
         if (callback) {
@@ -392,17 +385,9 @@ function PettyCache() {
      * @returns {Promise|undefined}
      */
     this.del = (key, callback) => {
-        const executor = () => {
-            return new Promise((resolve, reject) => {
-                redisClient.del(key, (err) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    memoryCache.del(key);
-                    resolve();
-                });
-            });
+        const executor = async () => {
+            await delAsync(key);
+            memoryCache.del(key);
         };
 
         if (callback) {
@@ -523,15 +508,13 @@ function PettyCache() {
         // Get TTL based on specified options
         const ttl = getTtl(options);
 
-        const _this = this;
-
         if (!intervals[key]) {
             const delay = ttl.min / 2;
 
             intervals[key] = setInterval(async () => {
                 // This distributed lock prevents multiple clients from executing func at the same time
                 try {
-                    await _this.mutex.lock(`interval-${key}`, { ttl: delay - 100 });
+                    await this.mutex.lock(`interval-${key}`, { ttl: delay - 100 });
                 } catch (err) {
                     return;
                 }
@@ -540,7 +523,7 @@ function PettyCache() {
                 try {
                     const data = await executeFunc(func);
 
-                    await _this.set(key, data, options);
+                    await this.set(key, data, options);
                 } catch (err) {
                     return;
                 }
@@ -634,32 +617,31 @@ function PettyCache() {
             options.retry.times = Object.hasOwn(options.retry, 'times') ? options.retry.times : 1;
             options.ttl = Object.hasOwn(options, 'ttl') ? options.ttl : 1000;
 
-            const executor = () => {
-                return new Promise((resolve, reject) => {
-                    async.retry({ interval: options.retry.interval, times: options.retry.times }, callback => {
-                        redisClient.set(key, '1', 'NX', 'PX', options.ttl, (err, res) => {
-                            if (err) {
-                                return callback(err);
-                            }
+            const attempt = async () => {
+                const res = await setAsync(key, '1', 'NX', 'PX', options.ttl);
 
-                            if (!res) {
-                                return callback(new Error());
-                            }
+                if (!res) {
+                    throw new Error();
+                }
 
-                            if (res !== 'OK') {
-                                return callback(new Error(res));
-                            }
+                if (res !== 'OK') {
+                    throw new Error(res);
+                }
+            };
 
-                            callback();
-                        });
-                    }, (err) => {
-                        if (err) {
-                            return reject(err);
-                        }
+            const executor = async () => {
+                let attempts = options.retry.times;
 
-                        resolve();
-                    });
-                });
+                while (attempts > 1) {
+                    try {
+                        return await attempt();
+                    } catch (err) {
+                        attempts--;
+                        await timers.setTimeout(options.retry.interval);
+                    }
+                }
+
+                return attempt();
             };
 
             if (callback) {
@@ -676,16 +658,8 @@ function PettyCache() {
          * @returns {Promise|undefined}
          */
         unlock: (key, callback) => {
-            const executor = () => {
-                return new Promise((resolve, reject) => {
-                    redisClient.del(key, (err) => {
-                        if (err) {
-                            return reject(err);
-                        }
-
-                        resolve();
-                    });
-                });
+            const executor = async () => {
+                await delAsync(key);
             };
 
             if (callback) {
@@ -1074,20 +1048,12 @@ function PettyCache() {
         // Get TTL based on specified options
         const ttl = getTtl(options);
 
-        const executor = () => {
-            return new Promise((resolve, reject) => {
-                // Store value in memory cache with a short expiration
-                memoryCache.put(key, value, random(2000, 5000));
+        const executor = async () => {
+            // Store value in memory cache with a short expiration
+            memoryCache.put(key, value, random(2000, 5000));
 
-                // Store value in Redis
-                redisClient.psetex(key, random(ttl.min, ttl.max), PettyCache.stringify(value), (err) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    resolve();
-                });
-            });
+            // Store value in Redis
+            await psetexAsync(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
         };
 
         if (callback) {

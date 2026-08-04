@@ -2,7 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert');
 const timers = require('node:timers/promises');
 
-const async = require('async');
 const memoryCache = require('memory-cache');
 const redis = require('redis');
 
@@ -525,11 +524,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
             values[key5] = null;
             values[key6] = undefined;
 
-            async.each(Object.keys(values), (key, callback) => {
-                pettyCache.set(key, values[key], { ttl: 6000 }, callback);
-            }, (err) => {
-                assert.ifError(err);
-
+            Promise.all(Object.keys(values).map(key => pettyCache.set(key, values[key], { ttl: 6000 }))).then(() => {
                 const keys = Object.keys(values);
 
                 // Add an additional key to check handling of missing keys
@@ -2540,11 +2535,9 @@ test('petty-cache', { concurrency: true }, async (t) => {
             values[key5] = null;
             values[key6] = undefined;
 
-            async.each(Object.keys(values), (key, callback) => {
-                redisClient.psetex(key, 100, PettyCache.stringify(values[key]), callback);
-            }, (err) => {
-                assert.ifError(err);
-
+            Promise.all(Object.keys(values).map(key => new Promise((resolve, reject) => {
+                redisClient.psetex(key, 100, PettyCache.stringify(values[key]), err => err ? reject(err) : resolve());
+            }))).then(() => {
                 const keys = Object.keys(values);
 
                 // Add an additional key to check handling of missing keys
@@ -2714,50 +2707,34 @@ test('petty-cache', { concurrency: true }, async (t) => {
     t.test('Benchmark', { concurrency: true }, async (t) => {
         const emojis = require('./emojis.json');
 
-        t.test('PettyCache should be faster than node-redis', (t, done) => {
-            let pettyCacheEnd;
+        t.test('PettyCache should be faster than node-redis', async () => {
             const pettyCacheKey = Math.random().toString();
-            let pettyCacheStart;
-            let redisEnd;
             const redisKey = Math.random().toString();
             const redisStart = Date.now();
 
-            redisClient.psetex(redisKey, 30000, JSON.stringify(emojis), (err) => {
-                assert.ifError(err);
-
-                async.times(500, (n, callback) => {
-                    redisClient.get(redisKey, (err, data) => {
-                        if (err) {
-                            return callback(err);
-                        }
-
-                        callback(null, JSON.parse(data));
-                    });
-                }, (err) => {
-                    redisEnd = Date.now();
-                    assert.ifError(err);
-                    pettyCacheStart = Date.now();
-
-                    pettyCache.set(pettyCacheKey, emojis, (err) => {
-                        assert.ifError(err);
-
-                        async.times(500, (n, callback) => {
-                            pettyCache.get(pettyCacheKey, (err, data) => {
-                                if (err) {
-                                    return callback(err);
-                                }
-
-                                callback(null, data);
-                            });
-                        }, (err) => {
-                            pettyCacheEnd = Date.now();
-                            assert.ifError(err);
-                            assert(pettyCacheEnd - pettyCacheStart < redisEnd - redisStart);
-                            done();
-                        });
-                    });
-                });
+            await new Promise((resolve, reject) => {
+                redisClient.psetex(redisKey, 30000, JSON.stringify(emojis), err => err ? reject(err) : resolve());
             });
+
+            await Promise.all(Array.from({ length: 500 }, () => new Promise((resolve, reject) => {
+                redisClient.get(redisKey, (err, data) => {
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    resolve(JSON.parse(data));
+                });
+            })));
+
+            const redisEnd = Date.now();
+            const pettyCacheStart = Date.now();
+
+            await pettyCache.set(pettyCacheKey, emojis);
+            await Promise.all(Array.from({ length: 500 }, () => pettyCache.get(pettyCacheKey)));
+
+            const pettyCacheEnd = Date.now();
+
+            assert(pettyCacheEnd - pettyCacheStart < redisEnd - redisStart);
         });
     });
 });
