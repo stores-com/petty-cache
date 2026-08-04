@@ -9,7 +9,7 @@ A cache module for Node.js that uses a two-level cache (in-memory cache for rece
 
 Also includes mutex and semaphore distributed locking primitives.
 
-Every function supports both callbacks and promises — omit the callback to receive a promise. Callback support is deprecated and will be removed in v5; callback-style usage emits a Node.js `DeprecationWarning`.
+As of v4, every function supports both promises (async/await) and callbacks — omit the callback to receive a promise. Callback support is deprecated and will be removed in v5; callback-style usage emits a Node.js `DeprecationWarning`.
 
 ## Features
 
