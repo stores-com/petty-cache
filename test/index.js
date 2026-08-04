@@ -11,6 +11,15 @@ const PettyCache = require('../index.js');
 const redisClient = redis.createClient();
 const pettyCache = new PettyCache(redisClient);
 
+// Collect deprecation warnings emitted while the suite exercises callback-style APIs
+const deprecationWarnings = [];
+
+process.on('warning', (warning) => {
+    if (warning.name === 'DeprecationWarning') {
+        deprecationWarnings.push(warning.message);
+    }
+});
+
 test('petty-cache', { concurrency: true }, async (t) => {
     t.test('new PettyCache()', { concurrency: true }, async (t) => {
         t.test('new PettyCache()', (t, done) => {
@@ -3534,5 +3543,14 @@ test('PettyCache.fetch should lock around Redis', (t, done) => {
                 done();
             });
         });
+    });
+});
+test('PettyCache should emit deprecation warnings for callback usage', (t, done) => {
+    // Warnings are emitted asynchronously; by this point the suite has exercised every callback-style API
+    setImmediate(() => {
+        assert.ok(deprecationWarnings.some(message => message.includes('pettyCache.fetch:')), 'expected a deprecation warning for pettyCache.fetch');
+        assert.ok(deprecationWarnings.some(message => message.includes('pettyCache.semaphore.acquireLock:')), 'expected a deprecation warning for pettyCache.semaphore.acquireLock');
+        assert.ok(deprecationWarnings.some(message => message.includes('Callback-style functions')), 'expected a deprecation warning for callback-style functions');
+        done();
     });
 });

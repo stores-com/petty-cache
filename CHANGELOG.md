@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [4.0.0] - 2026-08-03
 ### Changed
 - Every function now supports both callbacks and promises (async/await) — omit the callback to receive a promise. This includes cache-miss functions and `retrieveOrCreate`'s `size` option, which may now be async functions.
-- Callback support is deprecated and will be removed in v5.
+- Callback support is deprecated and will be removed in v5. Callback-style usage now emits a once-per-process `DeprecationWarning` per function.
 ### Fixed
 - A cache-miss function that throws synchronously no longer leaves the in-process locks for its key held forever.
 - Background refresh failures in `fetchAndRefresh` no longer produce unhandled promise rejections.

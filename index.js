@@ -200,6 +200,7 @@ function PettyCache() {
         };
 
         if (callback) {
+            deprecateCallback('pettyCache.bulkFetch');
             executor().then(result => callback(null, result)).catch(callback);
         } else {
             return executor();
@@ -260,6 +261,7 @@ function PettyCache() {
         };
 
         if (callback) {
+            deprecateCallback('pettyCache.bulkGet');
             executor().then(result => callback(null, result)).catch(callback);
         } else {
             return executor();
@@ -309,6 +311,7 @@ function PettyCache() {
         };
 
         if (callback) {
+            deprecateCallback('pettyCache.bulkSet');
             executor().then(result => callback(null, result)).catch(callback);
         } else {
             return executor();
@@ -336,6 +339,7 @@ function PettyCache() {
         };
 
         if (callback) {
+            deprecateCallback('pettyCache.del');
             executor().then(result => callback(null, result)).catch(callback);
         } else {
             return executor();
@@ -425,6 +429,7 @@ function PettyCache() {
         };
 
         if (callback) {
+            deprecateCallback('pettyCache.fetch');
             executor().then(result => callback(null, result)).catch(callback);
         } else {
             return executor();
@@ -475,7 +480,14 @@ function PettyCache() {
             }, delay);
         }
 
-        return this.fetch(key, func, options, callback);
+        const promise = this.fetch(key, func, options);
+
+        if (callback) {
+            deprecateCallback('pettyCache.fetchAndRefresh');
+            promise.then(result => callback(null, result)).catch(callback);
+        } else {
+            return promise;
+        }
     };
 
     /**
@@ -524,6 +536,7 @@ function PettyCache() {
         };
 
         if (callback) {
+            deprecateCallback('pettyCache.get');
             executor().then(result => callback(null, result)).catch(callback);
         } else {
             return executor();
@@ -583,6 +596,7 @@ function PettyCache() {
             };
 
             if (callback) {
+                deprecateCallback('pettyCache.mutex.lock');
                 executor().then(result => callback(null, result)).catch(callback);
             } else {
                 return executor();
@@ -608,6 +622,7 @@ function PettyCache() {
             };
 
             if (callback) {
+                deprecateCallback('pettyCache.mutex.unlock');
                 executor().then(result => callback(null, result)).catch(callback);
             } else {
                 return executor();
@@ -631,35 +646,22 @@ function PettyCache() {
             options = {};
         }
 
-        const _this = this;
+        const executor = async () => {
+            const data = await this.get(key);
 
-        const executor = () => {
-            return new Promise((resolve, reject) => {
-                _this.get(key, (err, data) => {
-                    if (err) {
-                        return reject(err);
-                    }
+            if (!data) {
+                throw new Error(`Key ${key} does not exist`);
+            }
 
-                    if (!data) {
-                        return reject(new Error(`Key ${key} does not exist`));
-                    }
+            for (let k in value) {
+                data[k] = value[k];
+            }
 
-                    for (let k in value) {
-                        data[k] = value[k];
-                    }
-
-                    _this.set(key, data, options, (err) => {
-                        if (err) {
-                            return reject(err);
-                        }
-
-                        resolve();
-                    });
-                });
-            });
+            await this.set(key, data, options);
         };
 
         if (callback) {
+            deprecateCallback('pettyCache.patch');
             executor().then(result => callback(null, result)).catch(callback);
         } else {
             return executor();
@@ -743,6 +745,7 @@ function PettyCache() {
             };
 
             if (callback) {
+                deprecateCallback('pettyCache.semaphore.acquireLock');
                 executor().then(result => callback(null, result)).catch(callback);
             } else {
                 return executor();
@@ -791,6 +794,7 @@ function PettyCache() {
             };
 
             if (callback) {
+                deprecateCallback('pettyCache.semaphore.consumeLock');
                 executor().then(result => callback(null, result)).catch(callback);
             } else {
                 return executor();
@@ -837,6 +841,7 @@ function PettyCache() {
             };
 
             if (callback) {
+                deprecateCallback('pettyCache.semaphore.expand');
                 executor().then(result => callback(null, result)).catch(callback);
             } else {
                 return executor();
@@ -880,6 +885,7 @@ function PettyCache() {
             };
 
             if (callback) {
+                deprecateCallback('pettyCache.semaphore.releaseLock');
                 executor().then(result => callback(null, result)).catch(callback);
             } else {
                 return executor();
@@ -919,6 +925,7 @@ function PettyCache() {
             };
 
             if (callback) {
+                deprecateCallback('pettyCache.semaphore.reset');
                 executor().then(result => callback(null, result)).catch(callback);
             } else {
                 return executor();
@@ -973,6 +980,7 @@ function PettyCache() {
             };
 
             if (callback) {
+                deprecateCallback('pettyCache.semaphore.retrieveOrCreate');
                 executor().then(result => callback(null, result)).catch(callback);
             } else {
                 return executor();
@@ -1015,6 +1023,7 @@ function PettyCache() {
         };
 
         if (callback) {
+            deprecateCallback('pettyCache.set');
             executor().then(result => callback(null, result)).catch(callback);
         } else {
             return executor();
@@ -1022,6 +1031,8 @@ function PettyCache() {
     };
 
 }
+
+const deprecationWarnings = new Set();
 
 /**
  * Acquires the in-process lock for the given key and resolves once it's held.
@@ -1032,6 +1043,20 @@ function acquireLock(key) {
     return new Promise(resolve => {
         lock(key, release => resolve(release()));
     });
+}
+
+/**
+ * Emits a once-per-process DeprecationWarning for callback-style usage.
+ * @param {string} name - The public method name shown in the warning.
+ * @param {string} [message] - Overrides the standard callback deprecation message.
+ */
+function deprecateCallback(name, message) {
+    if (deprecationWarnings.has(name)) {
+        return;
+    }
+
+    deprecationWarnings.add(name);
+    process.emitWarning(message || `${name}: callbacks are deprecated and will be removed in petty-cache v5. Omit the callback to receive a promise.`, 'DeprecationWarning');
 }
 
 /**
@@ -1047,6 +1072,8 @@ async function executeFunc(func, ...args) {
     }
 
     // If the function declares an additional parameter, there was a callback provided
+    deprecateCallback('callback-style functions', 'Callback-style functions passed to petty-cache are deprecated and will be removed in petty-cache v5. Use an async function instead.');
+
     return new Promise((resolve, reject) => {
         func(...args, (err, data) => {
             if (err) {
