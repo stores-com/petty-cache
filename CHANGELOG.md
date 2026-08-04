@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-08-04
+### Changed
+- Callback support is removed. Every function returns a promise; passing a callback rejects with a `TypeError`.
+- Cache-miss functions and `retrieveOrCreate`'s `size` option must be async (or plain-return) functions; callback-style functions are no longer supported.
+
 ## [4.0.0] - 2026-08-03
 ### Changed
 - Every function now supports both callbacks and promises (async/await) — omit the callback to receive a promise. This includes cache-miss functions and `retrieveOrCreate`'s `size` option, which may now be async functions.
