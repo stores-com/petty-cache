@@ -176,16 +176,16 @@ function PettyCache() {
             min: 30000
         };
 
-        if (Object.prototype.hasOwnProperty.call(options, 'ttl')) {
+        if (Object.hasOwn(options, 'ttl')) {
             if (typeof options.ttl === 'number') {
                 ttl.max = options.ttl;
                 ttl.min = options.ttl;
             } else {
-                if (Object.prototype.hasOwnProperty.call(options.ttl, 'max')) {
+                if (Object.hasOwn(options.ttl, 'max')) {
                     ttl.max = options.ttl.max;
                 }
 
-                if (Object.prototype.hasOwnProperty.call(options.ttl, 'min')) {
+                if (Object.hasOwn(options.ttl, 'min')) {
                     ttl.min = options.ttl.min;
                 }
             }
@@ -755,10 +755,10 @@ function PettyCache() {
                 options = {};
             }
 
-            options.retry = Object.prototype.hasOwnProperty.call(options, 'retry') ? options.retry : {};
-            options.retry.interval = Object.prototype.hasOwnProperty.call(options.retry, 'interval') ? options.retry.interval : 100;
-            options.retry.times = Object.prototype.hasOwnProperty.call(options.retry, 'times') ? options.retry.times : 1;
-            options.ttl = Object.prototype.hasOwnProperty.call(options, 'ttl') ? options.ttl : 1000;
+            options.retry = Object.hasOwn(options, 'retry') ? options.retry : {};
+            options.retry.interval = Object.hasOwn(options.retry, 'interval') ? options.retry.interval : 100;
+            options.retry.times = Object.hasOwn(options.retry, 'times') ? options.retry.times : 1;
+            options.ttl = Object.hasOwn(options, 'ttl') ? options.ttl : 1000;
 
             const attempt = async () => {
                 // Mutex lock around semaphore
@@ -1033,7 +1033,7 @@ function PettyCache() {
                     if (typeof options.size === 'function') {
                         size = await executeFunc(options.size);
                     } else {
-                        size = Object.prototype.hasOwnProperty.call(options, 'size') ? options.size : 1;
+                        size = Object.hasOwn(options, 'size') ? options.size : 1;
                     }
 
                     const pool = Array(Math.max(size, 1)).fill({ status: 'available' });
