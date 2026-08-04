@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Callback support is removed. Every function returns a promise; passing a callback rejects with a `TypeError`.
 - Cache-miss functions and `retrieveOrCreate`'s `size` option must be async (or plain-return) functions; callback-style functions are no longer supported.
+- Upgraded the `redis` client from v3 to v6. The client is connected automatically, and injected clients must be node-redis v6 clients. The legacy `(port, [host, [options]])` constructor signature is still supported and translated to node-redis options, including `auth_pass` to `password`; all other options must use the node-redis v6 shape.
 
 ## [4.0.0] - 2026-08-03
 ### Changed

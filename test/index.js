@@ -60,6 +60,26 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.strictEqual(fromRedis.foo, 'bar');
         });
 
+        t.test('new PettyCache(port, host, options) should translate legacy options', () => {
+            const originalCreateClient = redis.createClient;
+            let capturedOptions;
+
+            redis.createClient = (options) => {
+                capturedOptions = options;
+                return originalCreateClient();
+            };
+
+            const newPettyCache = new PettyCache(6379, 'localhost', { auth_pass: 'secret' });
+
+            redis.createClient = originalCreateClient;
+
+            assert(newPettyCache);
+            assert.strictEqual(capturedOptions.password, 'secret');
+            assert.strictEqual(capturedOptions.auth_pass, undefined);
+            assert.strictEqual(capturedOptions.socket.host, 'localhost');
+            assert.strictEqual(capturedOptions.socket.port, 6379);
+        });
+
         t.test('new PettyCache(redisClient)', async () => {
             const key = Math.random().toString();
             const redisClient = redis.createClient();
@@ -1707,7 +1727,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
     });
 
     t.test('redisClient', { concurrency: true }, async (t) => {
-        t.test('redisClient.mget(falsy keys)', (t, done) => {
+        t.test('redisClient.mGet(falsy keys)', async () => {
             const key1 = Math.random().toString();
             const key2 = Math.random().toString();
             const key3 = Math.random().toString();
@@ -1723,172 +1743,126 @@ test('petty-cache', { concurrency: true }, async (t) => {
             values[key5] = null;
             values[key6] = undefined;
 
-            Promise.all(Object.keys(values).map(key => new Promise((resolve, reject) => {
-                redisClient.psetex(key, 100, PettyCache.stringify(values[key]), err => err ? reject(err) : resolve());
-            }))).then(() => {
-                const keys = Object.keys(values);
+            await Promise.all(Object.keys(values).map(key => redisClient.pSetEx(key, 100, PettyCache.stringify(values[key]))));
 
-                // Add an additional key to check handling of missing keys
-                keys.push(Math.random().toString());
+            const keys = Object.keys(values);
 
-                redisClient.mget(keys, (err, data) => {
-                    assert.ifError(err);
-                    assert.strictEqual(data.length, 7);
-                    assert.strictEqual(data[0], '""');
-                    assert.strictEqual(PettyCache.parse(data[0]), '');
-                    assert.strictEqual(data[1], '0');
-                    assert.strictEqual(PettyCache.parse(data[1]), 0);
-                    assert.strictEqual(data[2], 'false');
-                    assert.strictEqual(PettyCache.parse(data[2]), false);
-                    assert.strictEqual(data[3], '"__NaN"');
-                    assert.strictEqual(typeof PettyCache.parse(data[3]), 'number');
-                    assert(isNaN(PettyCache.parse(data[3])));
-                    assert.strictEqual(data[4], '"__null"');
-                    assert.strictEqual(PettyCache.parse(data[4]), null);
-                    assert.strictEqual(data[5], '"__undefined"');
-                    assert.strictEqual(PettyCache.parse(data[5]), undefined);
-                    assert.strictEqual(data[6], null);
-                    done();
-                });
-            });
+            // Add an additional key to check handling of missing keys
+            keys.push(Math.random().toString());
+
+            const data = await redisClient.mGet(keys);
+
+            assert.strictEqual(data.length, 7);
+            assert.strictEqual(data[0], '""');
+            assert.strictEqual(PettyCache.parse(data[0]), '');
+            assert.strictEqual(data[1], '0');
+            assert.strictEqual(PettyCache.parse(data[1]), 0);
+            assert.strictEqual(data[2], 'false');
+            assert.strictEqual(PettyCache.parse(data[2]), false);
+            assert.strictEqual(data[3], '"__NaN"');
+            assert.strictEqual(typeof PettyCache.parse(data[3]), 'number');
+            assert(isNaN(PettyCache.parse(data[3])));
+            assert.strictEqual(data[4], '"__null"');
+            assert.strictEqual(PettyCache.parse(data[4]), null);
+            assert.strictEqual(data[5], '"__undefined"');
+            assert.strictEqual(PettyCache.parse(data[5]), undefined);
+            assert.strictEqual(data[6], null);
         });
 
-        t.test('redisClient.psetex(key, \'\')', (t, done) => {
+        t.test('redisClient.pSetEx(key, \'\')', async () => {
             const key = Math.random().toString();
 
-            redisClient.psetex(key, 100, PettyCache.stringify(''), (err) => {
-                assert.ifError(err);
+            await redisClient.pSetEx(key, 100, PettyCache.stringify(''));
 
-                redisClient.get(key, (err, data) => {
-                    assert.ifError(err);
-                    assert.strictEqual(data, '""');
-                    assert.strictEqual(PettyCache.parse(data), '');
+            const data = await redisClient.get(key);
 
-                    // Wait for Redis cache to expire
-                    setTimeout(() => {
-                        redisClient.get(key, (err, data) => {
-                            assert.ifError(err);
-                            assert.strictEqual(data, null);
-                            done();
-                        });
-                    }, 101);
-                });
-            });
+            assert.strictEqual(data, '""');
+            assert.strictEqual(PettyCache.parse(data), '');
+
+            // Wait for Redis cache to expire
+            await timers.setTimeout(101);
+
+            assert.strictEqual(await redisClient.get(key), null);
         });
 
-        t.test('redisClient.psetex(key, 0)', (t, done) => {
+        t.test('redisClient.pSetEx(key, 0)', async () => {
             const key = Math.random().toString();
 
-            redisClient.psetex(key, 100, PettyCache.stringify(0), (err) => {
-                assert.ifError(err);
+            await redisClient.pSetEx(key, 100, PettyCache.stringify(0));
 
-                redisClient.get(key, (err, data) => {
-                    assert.ifError(err);
-                    assert.strictEqual(data, '0');
-                    assert.strictEqual(PettyCache.parse(data), 0);
+            const data = await redisClient.get(key);
 
-                    // Wait for Redis cache to expire
-                    setTimeout(() => {
-                        redisClient.get(key, (err, data) => {
-                            assert.ifError(err);
-                            assert.strictEqual(data, null);
-                            done();
-                        });
-                    }, 101);
-                });
-            });
+            assert.strictEqual(data, '0');
+            assert.strictEqual(PettyCache.parse(data), 0);
+
+            // Wait for Redis cache to expire
+            await timers.setTimeout(101);
+
+            assert.strictEqual(await redisClient.get(key), null);
         });
 
-        t.test('redisClient.psetex(key, false)', (t, done) => {
+        t.test('redisClient.pSetEx(key, false)', async () => {
             const key = Math.random().toString();
 
-            redisClient.psetex(key, 100, PettyCache.stringify(false), (err) => {
-                assert.ifError(err);
+            await redisClient.pSetEx(key, 100, PettyCache.stringify(false));
 
-                redisClient.get(key, (err, data) => {
-                    assert.ifError(err);
-                    assert.strictEqual(data, 'false');
-                    assert.strictEqual(PettyCache.parse(data), false);
+            const data = await redisClient.get(key);
 
-                    // Wait for Redis cache to expire
-                    setTimeout(() => {
-                        redisClient.get(key, (err, data) => {
-                            assert.ifError(err);
-                            assert.strictEqual(data, null);
-                            done();
-                        });
-                    }, 101);
-                });
-            });
+            assert.strictEqual(data, 'false');
+            assert.strictEqual(PettyCache.parse(data), false);
+
+            // Wait for Redis cache to expire
+            await timers.setTimeout(101);
+
+            assert.strictEqual(await redisClient.get(key), null);
         });
 
-        t.test('redisClient.psetex(key, NaN)', (t, done) => {
+        t.test('redisClient.pSetEx(key, NaN)', async () => {
             const key = Math.random().toString();
 
-            redisClient.psetex(key, 100, PettyCache.stringify(NaN), (err) => {
-                assert.ifError(err);
+            await redisClient.pSetEx(key, 100, PettyCache.stringify(NaN));
 
-                redisClient.get(key, (err, data) => {
-                    assert.ifError(err);
-                    assert.strictEqual(data, '"__NaN"');
-                    assert(isNaN(PettyCache.parse(data)));
+            const data = await redisClient.get(key);
 
-                    // Wait for Redis cache to expire
-                    setTimeout(() => {
-                        redisClient.get(key, (err, data) => {
-                            assert.ifError(err);
-                            assert.strictEqual(data, null);
-                            done();
-                        });
-                    }, 101);
-                });
-            });
+            assert.strictEqual(data, '"__NaN"');
+            assert(isNaN(PettyCache.parse(data)));
+
+            // Wait for Redis cache to expire
+            await timers.setTimeout(101);
+
+            assert.strictEqual(await redisClient.get(key), null);
         });
 
-        t.test('redisClient.psetex(key, null)', (t, done) => {
+        t.test('redisClient.pSetEx(key, null)', async () => {
             const key = Math.random().toString();
 
-            redisClient.psetex(key, 100, PettyCache.stringify(null), (err) => {
-                assert.ifError(err);
+            await redisClient.pSetEx(key, 100, PettyCache.stringify(null));
 
-                redisClient.get(key, (err, data) => {
-                    assert.ifError(err);
-                    assert.strictEqual(data, '"__null"');
-                    assert.strictEqual(PettyCache.parse(data), null);
+            const data = await redisClient.get(key);
 
-                    // Wait for Redis cache to expire
-                    setTimeout(() => {
-                        redisClient.get(key, (err, data) => {
-                            assert.ifError(err);
-                            assert.strictEqual(data, null);
-                            done();
-                        });
-                    }, 101);
-                });
-            });
+            assert.strictEqual(data, '"__null"');
+            assert.strictEqual(PettyCache.parse(data), null);
+
+            // Wait for Redis cache to expire
+            await timers.setTimeout(101);
+
+            assert.strictEqual(await redisClient.get(key), null);
         });
 
-        t.test('redisClient.psetex(key, undefined)', (t, done) => {
+        t.test('redisClient.pSetEx(key, undefined)', async () => {
             const key = Math.random().toString();
 
-            redisClient.psetex(key, 100, PettyCache.stringify(undefined), (err) => {
-                assert.ifError(err);
+            await redisClient.pSetEx(key, 100, PettyCache.stringify(undefined));
 
-                redisClient.get(key, (err, data) => {
-                    assert.ifError(err);
-                    assert.strictEqual(data, '"__undefined"');
-                    assert.strictEqual(PettyCache.parse(data), undefined);
+            const data = await redisClient.get(key);
 
-                    // Wait for Redis cache to expire
-                    setTimeout(() => {
-                        redisClient.get(key, (err, data) => {
-                            assert.ifError(err);
-                            assert.strictEqual(data, null);
-                            done();
-                        });
-                    }, 101);
-                });
-            });
+            assert.strictEqual(data, '"__undefined"');
+            assert.strictEqual(PettyCache.parse(data), undefined);
+
+            // Wait for Redis cache to expire
+            await timers.setTimeout(101);
+
+            assert.strictEqual(await redisClient.get(key), null);
         });
     });
 
@@ -1900,19 +1874,9 @@ test('petty-cache', { concurrency: true }, async (t) => {
             const redisKey = Math.random().toString();
             const redisStart = Date.now();
 
-            await new Promise((resolve, reject) => {
-                redisClient.psetex(redisKey, 30000, JSON.stringify(emojis), err => err ? reject(err) : resolve());
-            });
+            await redisClient.pSetEx(redisKey, 30000, JSON.stringify(emojis));
 
-            await Promise.all(Array.from({ length: 500 }, () => new Promise((resolve, reject) => {
-                redisClient.get(redisKey, (err, data) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    resolve(JSON.parse(data));
-                });
-            })));
+            await Promise.all(Array.from({ length: 500 }, () => redisClient.get(redisKey).then(data => JSON.parse(data))));
 
             const redisEnd = Date.now();
             const pettyCacheStart = Date.now();
@@ -1931,7 +1895,7 @@ test('PettyCache.fetch should return error if Redis GET fails', async () => {
     const stubClient = redis.createClient();
     const originalGet = stubClient.get.bind(stubClient);
 
-    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+    stubClient.get = () => Promise.reject(new Error('Redis GET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -1947,7 +1911,7 @@ test('PettyCache.get should return error if Redis GET fails', async () => {
     const stubClient = redis.createClient();
     const originalGet = stubClient.get.bind(stubClient);
 
-    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+    stubClient.get = () => Promise.reject(new Error('Redis GET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -1961,9 +1925,9 @@ test('PettyCache.get should return error if Redis GET fails', async () => {
 
 test('PettyCache.bulkFetch should return error if Redis MGET fails', async () => {
     const stubClient = redis.createClient();
-    const originalMget = stubClient.mget.bind(stubClient);
+    const originalMGet = stubClient.mGet.bind(stubClient);
 
-    stubClient.mget = (keys, callback) => callback(new Error('Redis MGET error'));
+    stubClient.mGet = () => Promise.reject(new Error('Redis MGET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -1972,14 +1936,14 @@ test('PettyCache.bulkFetch should return error if Redis MGET fails', async () =>
         { message: 'Redis MGET error' }
     );
 
-    stubClient.mget = originalMget;
+    stubClient.mGet = originalMGet;
 });
 
 test('PettyCache.bulkGet should return error if Redis MGET fails', async () => {
     const stubClient = redis.createClient();
-    const originalMget = stubClient.mget.bind(stubClient);
+    const originalMGet = stubClient.mGet.bind(stubClient);
 
-    stubClient.mget = (keys, callback) => callback(new Error('Redis MGET error'));
+    stubClient.mGet = () => Promise.reject(new Error('Redis MGET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -1988,17 +1952,17 @@ test('PettyCache.bulkGet should return error if Redis MGET fails', async () => {
         { message: 'Redis MGET error' }
     );
 
-    stubClient.mget = originalMget;
+    stubClient.mGet = originalMGet;
 });
 
 test('PettyCache.bulkSet should return error if Redis batch exec fails', async () => {
     const stubClient = redis.createClient();
-    const originalBatch = stubClient.batch.bind(stubClient);
+    const originalMulti = stubClient.multi.bind(stubClient);
 
-    stubClient.batch = () => {
-        const batch = originalBatch();
-        batch.exec = (callback) => callback(new Error('Redis EXEC error'));
-        return batch;
+    stubClient.multi = () => {
+        const multi = originalMulti();
+        multi.execAsPipeline = () => Promise.reject(new Error('Redis EXEC error'));
+        return multi;
     };
 
     const pettyCache = new PettyCache(stubClient);
@@ -2010,17 +1974,17 @@ test('PettyCache.bulkSet should return error if Redis batch exec fails', async (
         { message: 'Redis EXEC error' }
     );
 
-    stubClient.batch = originalBatch;
+    stubClient.multi = originalMulti;
 });
 
 test('PettyCache.bulkFetch should return error if bulkSet fails', async () => {
     const stubClient = redis.createClient();
-    const originalBatch = stubClient.batch.bind(stubClient);
+    const originalMulti = stubClient.multi.bind(stubClient);
 
-    stubClient.batch = () => {
-        const batch = originalBatch();
-        batch.exec = (callback) => callback(new Error('Redis EXEC error'));
-        return batch;
+    stubClient.multi = () => {
+        const multi = originalMulti();
+        multi.execAsPipeline = () => Promise.reject(new Error('Redis EXEC error'));
+        return multi;
     };
 
     const pettyCache = new PettyCache(stubClient);
@@ -2035,14 +1999,14 @@ test('PettyCache.bulkFetch should return error if bulkSet fails', async () => {
         { message: 'Redis EXEC error' }
     );
 
-    stubClient.batch = originalBatch;
+    stubClient.multi = originalMulti;
 });
 
 test('PettyCache.mutex.lock should return error if Redis SET fails', async () => {
     const stubClient = redis.createClient();
     const originalSet = stubClient.set.bind(stubClient);
 
-    stubClient.set = (...args) => args[args.length - 1](new Error('Redis SET error'));
+    stubClient.set = () => Promise.reject(new Error('Redis SET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -2058,7 +2022,7 @@ test('PettyCache.del should return error if Redis DEL fails', async () => {
     const stubClient = redis.createClient();
     const originalDel = stubClient.del.bind(stubClient);
 
-    stubClient.del = (key, callback) => callback(new Error('Redis DEL error'));
+    stubClient.del = () => Promise.reject(new Error('Redis DEL error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -2074,7 +2038,7 @@ test('PettyCache.mutex.unlock should return error if Redis DEL fails', async () 
     const stubClient = redis.createClient();
     const originalDel = stubClient.del.bind(stubClient);
 
-    stubClient.del = (key, callback) => callback(new Error('Redis DEL error'));
+    stubClient.del = () => Promise.reject(new Error('Redis DEL error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -2090,7 +2054,7 @@ test('PettyCache.patch should return error if Redis GET fails', async () => {
     const stubClient = redis.createClient();
     const originalGet = stubClient.get.bind(stubClient);
 
-    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+    stubClient.get = () => Promise.reject(new Error('Redis GET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -2106,7 +2070,7 @@ test('PettyCache.mutex.lock should return error if Redis SET returns unexpected 
     const stubClient = redis.createClient();
     const originalSet = stubClient.set.bind(stubClient);
 
-    stubClient.set = (...args) => args[args.length - 1](null, 'UNEXPECTED');
+    stubClient.set = () => Promise.resolve('UNEXPECTED');
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -2122,7 +2086,7 @@ test('PettyCache.semaphore.retrieveOrCreate should return error if Redis GET fai
     const stubClient = redis.createClient();
     const originalGet = stubClient.get.bind(stubClient);
 
-    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+    stubClient.get = () => Promise.reject(new Error('Redis GET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -2138,7 +2102,7 @@ test('PettyCache.semaphore.acquireLock should return error if Redis GET fails', 
     const stubClient = redis.createClient();
     const originalGet = stubClient.get.bind(stubClient);
 
-    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+    stubClient.get = () => Promise.reject(new Error('Redis GET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -2154,7 +2118,7 @@ test('PettyCache.semaphore.consumeLock should return error if Redis GET fails', 
     const stubClient = redis.createClient();
     const originalGet = stubClient.get.bind(stubClient);
 
-    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+    stubClient.get = () => Promise.reject(new Error('Redis GET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -2170,7 +2134,7 @@ test('PettyCache.semaphore.expand should return error if Redis GET fails', async
     const stubClient = redis.createClient();
     const originalGet = stubClient.get.bind(stubClient);
 
-    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+    stubClient.get = () => Promise.reject(new Error('Redis GET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -2186,7 +2150,7 @@ test('PettyCache.semaphore.releaseLock should return error if Redis GET fails', 
     const stubClient = redis.createClient();
     const originalGet = stubClient.get.bind(stubClient);
 
-    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+    stubClient.get = () => Promise.reject(new Error('Redis GET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -2202,7 +2166,7 @@ test('PettyCache.semaphore.reset should return error if Redis GET fails', async 
     const stubClient = redis.createClient();
     const originalGet = stubClient.get.bind(stubClient);
 
-    stubClient.get = (key, callback) => callback(new Error('Redis GET error'));
+    stubClient.get = () => Promise.reject(new Error('Redis GET error'));
 
     const pettyCache = new PettyCache(stubClient);
 
@@ -2219,11 +2183,11 @@ test('PettyCache.semaphore.retrieveOrCreate should return error if Redis SET fai
     const originalSet = stubClient.set.bind(stubClient);
 
     stubClient.set = (...args) => {
-        if (args.includes('NX')) {
+        if (args[2] && args[2].NX) {
             return originalSet(...args);
         }
 
-        args[args.length - 1](new Error('Redis SET error'));
+        return Promise.reject(new Error('Redis SET error'));
     };
 
     const pettyCache = new PettyCache(stubClient);
@@ -2245,11 +2209,11 @@ test('PettyCache.semaphore.acquireLock should return error if Redis SET fails', 
     const originalSet = stubClient.set.bind(stubClient);
 
     stubClient.set = (...args) => {
-        if (args.includes('NX')) {
+        if (args[2] && args[2].NX) {
             return originalSet(...args);
         }
 
-        args[args.length - 1](new Error('Redis SET error'));
+        return Promise.reject(new Error('Redis SET error'));
     };
 
     const stubCache = new PettyCache(stubClient);
@@ -2273,11 +2237,11 @@ test('PettyCache.semaphore.consumeLock should return error if Redis SET fails', 
     const originalSet = stubClient.set.bind(stubClient);
 
     stubClient.set = (...args) => {
-        if (args.includes('NX')) {
+        if (args[2] && args[2].NX) {
             return originalSet(...args);
         }
 
-        args[args.length - 1](new Error('Redis SET error'));
+        return Promise.reject(new Error('Redis SET error'));
     };
 
     const stubCache = new PettyCache(stubClient);
@@ -2299,11 +2263,11 @@ test('PettyCache.semaphore.expand should return error if Redis SET fails', async
     const originalSet = stubClient.set.bind(stubClient);
 
     stubClient.set = (...args) => {
-        if (args.includes('NX')) {
+        if (args[2] && args[2].NX) {
             return originalSet(...args);
         }
 
-        args[args.length - 1](new Error('Redis SET error'));
+        return Promise.reject(new Error('Redis SET error'));
     };
 
     const stubCache = new PettyCache(stubClient);
@@ -2327,11 +2291,11 @@ test('PettyCache.semaphore.releaseLock should return error if Redis SET fails', 
     const originalSet = stubClient.set.bind(stubClient);
 
     stubClient.set = (...args) => {
-        if (args.includes('NX')) {
+        if (args[2] && args[2].NX) {
             return originalSet(...args);
         }
 
-        args[args.length - 1](new Error('Redis SET error'));
+        return Promise.reject(new Error('Redis SET error'));
     };
 
     const stubCache = new PettyCache(stubClient);
@@ -2353,11 +2317,11 @@ test('PettyCache.semaphore.reset should return error if Redis SET fails', async 
     const originalSet = stubClient.set.bind(stubClient);
 
     stubClient.set = (...args) => {
-        if (args.includes('NX')) {
+        if (args[2] && args[2].NX) {
             return originalSet(...args);
         }
 
-        args[args.length - 1](new Error('Redis SET error'));
+        return Promise.reject(new Error('Redis SET error'));
     };
 
     const stubCache = new PettyCache(stubClient);
@@ -2454,17 +2418,15 @@ test('PettyCache.fetch should return error if inner Redis GET fails (double-chec
     const originalGet = stubClient.get.bind(stubClient);
     let getCallCount = 0;
 
-    stubClient.get = (...args) => {
+    stubClient.get = () => {
         getCallCount++;
 
         if (getCallCount === 1) {
-            const callback = args[args.length - 1];
-            return callback(null, null);
+            return Promise.resolve(null);
         }
 
         stubClient.get = originalGet;
-        const callback = args[args.length - 1];
-        callback(new Error('Redis GET error'));
+        return Promise.reject(new Error('Redis GET error'));
     };
 
     const pettyCache = new PettyCache(stubClient);
@@ -2482,17 +2444,15 @@ test('PettyCache.fetch should return cached value from inner Redis GET (double-c
     const originalGet = stubClient.get.bind(stubClient);
     let getCallCount = 0;
 
-    stubClient.get = (...args) => {
+    stubClient.get = () => {
         getCallCount++;
 
         if (getCallCount === 1) {
-            const callback = args[args.length - 1];
-            return callback(null, null);
+            return Promise.resolve(null);
         }
 
         stubClient.get = originalGet;
-        const callback = args[args.length - 1];
-        callback(null, JSON.stringify('cached-value'));
+        return Promise.resolve(JSON.stringify('cached-value'));
     };
 
     const pettyCache = new PettyCache(stubClient);
@@ -2510,14 +2470,13 @@ test('PettyCache.fetch should return cached value from inner memory cache (doubl
     const key = Math.random().toString();
     let stubCache;
 
-    stubClient.get = (...args) => {
+    stubClient.get = () => {
         stubClient.get = originalGet;
 
         // Populate memory cache synchronously via set before returning
         stubCache.set(key, 'cached-value').catch(() => {});
 
-        const callback = args[args.length - 1];
-        callback(null, null);
+        return Promise.resolve(null);
     };
 
     stubCache = new PettyCache(stubClient);
@@ -2533,9 +2492,7 @@ test('PettyCache.get should return cached value from double-checked lock', async
     const key = Math.random().toString();
 
     // Put value directly in Redis (not memory cache)
-    await new Promise((resolve, reject) => {
-        redisClient.psetex(key, 10000, JSON.stringify('test-value'), err => err ? reject(err) : resolve());
-    });
+    await redisClient.pSetEx(key, 10000, JSON.stringify('test-value'));
 
     // Two concurrent gets - second should hit memory cache inside lock
     const values = await Promise.all([pettyCache.get(key), pettyCache.get(key)]);
@@ -2546,12 +2503,11 @@ test('PettyCache.get should return cached value from double-checked lock', async
 
 test('PettyCache.set should return error if Redis PSETEX fails', async () => {
     const stubClient = redis.createClient();
-    const originalPsetex = stubClient.psetex.bind(stubClient);
+    const originalPSetEx = stubClient.pSetEx.bind(stubClient);
 
-    stubClient.psetex = (...args) => {
-        stubClient.psetex = originalPsetex;
-        const callback = args[args.length - 1];
-        callback(new Error('Redis PSETEX error'));
+    stubClient.pSetEx = () => {
+        stubClient.pSetEx = originalPSetEx;
+        return Promise.reject(new Error('Redis PSETEX error'));
     };
 
     const pettyCache = new PettyCache(stubClient);
@@ -2561,12 +2517,12 @@ test('PettyCache.set should return error if Redis PSETEX fails', async () => {
         { message: 'Redis PSETEX error' }
     );
 
-    stubClient.psetex = originalPsetex;
+    stubClient.pSetEx = originalPSetEx;
 });
 
 test('PettyCache.patch should return error if Redis PSETEX fails', async () => {
     const stubClient = redis.createClient();
-    const originalPsetex = stubClient.psetex.bind(stubClient);
+    const originalPSetEx = stubClient.pSetEx.bind(stubClient);
     const key = Math.random().toString();
 
     const pettyCache = new PettyCache(stubClient);
@@ -2574,11 +2530,10 @@ test('PettyCache.patch should return error if Redis PSETEX fails', async () => {
     // First set a value so patch has something to patch
     await pettyCache.set(key, { a: 1 });
 
-    // Now stub psetex to fail on the next call (patch's inner set)
-    stubClient.psetex = (...args) => {
-        stubClient.psetex = originalPsetex;
-        const callback = args[args.length - 1];
-        callback(new Error('Redis PSETEX error'));
+    // Now stub pSetEx to fail on the next call (patch's inner set)
+    stubClient.pSetEx = () => {
+        stubClient.pSetEx = originalPSetEx;
+        return Promise.reject(new Error('Redis PSETEX error'));
     };
 
     await assert.rejects(
@@ -2586,13 +2541,11 @@ test('PettyCache.patch should return error if Redis PSETEX fails', async () => {
         { message: 'Redis PSETEX error' }
     );
 
-    stubClient.psetex = originalPsetex;
+    stubClient.pSetEx = originalPSetEx;
 });
 
 test('PettyCache.fetch should lock around Redis', async () => {
-    const infoBefore = await new Promise((resolve, reject) => {
-        redisClient.info('commandstats', (err, info) => err ? reject(err) : resolve(info));
-    });
+    const infoBefore = await redisClient.info('commandstats');
 
     const lineBefore = infoBefore.split('\n').find(i => i.startsWith('cmdstat_get:'));
     const tokenBefore = lineBefore.split(/:|,/).find(i => i.startsWith('calls='));
@@ -2610,9 +2563,7 @@ test('PettyCache.fetch should lock around Redis', async () => {
 
     results.forEach(data => assert.equal(data, 1));
 
-    const infoAfter = await new Promise((resolve, reject) => {
-        redisClient.info('commandstats', (err, info) => err ? reject(err) : resolve(info));
-    });
+    const infoAfter = await redisClient.info('commandstats');
 
     const lineAfter = infoAfter.split('\n').find(i => i.startsWith('cmdstat_get:'));
     const tokenAfter = lineAfter.split(/:|,/).find(i => i.startsWith('calls='));

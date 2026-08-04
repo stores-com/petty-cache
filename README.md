@@ -46,16 +46,20 @@ const value = await pettyCache.fetch('key', async () => {
 
 ### new PettyCache([port, [host, [options]]])
 
-Creates a new petty-cache client. `port`, `host`, and `options` are passed directly to [redis.createClient()](https://www.npmjs.com/package/redis#rediscreateclient).
+Creates a new petty-cache client backed by [node-redis](https://www.npmjs.com/package/redis) v6 and connects it automatically. The legacy positional `port` and `host` arguments and the `auth_pass` option are translated to node-redis options; all other options are passed to [redis.createClient()](https://www.npmjs.com/package/redis) in the node-redis v6 shape.
 
 **Example**
 ```javascript
 const pettyCache = new PettyCache(6379, 'localhost', { auth_pass: 'secret' });
 ```
 
+```javascript
+const pettyCache = new PettyCache({ password: 'secret', socket: { host: 'localhost', port: 6379 } });
+```
+
 ### new PettyCache(RedisClient)
 
-Alternatively, you can inject your own [RedisClient](https://www.npmjs.com/package/redis) into Petty Cache.
+Alternatively, you can inject your own node-redis v6 client into Petty Cache. If the client isn't already connected, petty-cache connects it.
 
 **Example**
 ```javascript

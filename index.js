@@ -1,5 +1,4 @@
 const timers = require('node:timers/promises');
-const util = require('node:util');
 
 const lock = require('lock').Lock();
 const memoryCache = require('memory-cache');
@@ -43,8 +42,9 @@ function random(min, max) {
 
 /**
  * Creates a new PettyCache instance backed by Redis.
- * Accepts the same arguments as redis.createClient(), or an existing RedisClient instance.
- * @param {...*} args - Either a RedisClient instance, or arguments forwarded to redis.createClient().
+ * Accepts a node-redis client instance, a redis.createClient() options object, or the legacy
+ * (port, [host, [options]]) signature, which is translated (including auth_pass to password).
+ * @param {...*} args - A RedisClient instance, a createClient() options object, or legacy positional arguments.
  */
 function PettyCache() {
     const intervals = {};
@@ -52,20 +52,34 @@ function PettyCache() {
 
     if (arguments[0] instanceof redis.RedisClient) {
         redisClient = arguments[0];
+    } else if (typeof arguments[0] === 'number') {
+        // Translate the legacy (port, [host, [options]]) signature to node-redis options
+        const options = Object.assign({}, arguments[2]);
+
+        options.socket = Object.assign({}, options.socket, { port: arguments[0] });
+
+        if (arguments[1] !== undefined) {
+            options.socket.host = arguments[1];
+        }
+
+        if (options.auth_pass) {
+            options.password = options.auth_pass;
+            delete options.auth_pass;
+        }
+
+        redisClient = redis.createClient(options);
     } else {
-        redisClient = redis.createClient(...arguments);
+        redisClient = redis.createClient(arguments[0]);
     }
 
     //eslint-disable-next-line no-console
     redisClient.on('error', err => console.warn(`Warning: Redis reported a client error: ${err}`));
 
-    // Promisify per call rather than once at construction so that wrappers applied to the
-    // client's methods later (APM instrumentation, test stubs) are respected
-    const delAsync = (...args) => util.promisify(redisClient.del).apply(redisClient, args);
-    const getAsync = (...args) => util.promisify(redisClient.get).apply(redisClient, args);
-    const mgetAsync = (...args) => util.promisify(redisClient.mget).apply(redisClient, args);
-    const psetexAsync = (...args) => util.promisify(redisClient.psetex).apply(redisClient, args);
-    const setAsync = (...args) => util.promisify(redisClient.set).apply(redisClient, args);
+    // Connect automatically; commands issued while the client is connecting are queued.
+    // Connection errors surface through the error event above and as rejected commands.
+    if (!redisClient.isOpen) {
+        redisClient.connect().catch(() => {});
+    }
 
     /**
      * Fetches multiple keys from Redis.
@@ -74,7 +88,7 @@ function PettyCache() {
      */
     async function bulkGetFromRedis(keys) {
         // Try to get values from Redis
-        const data = await mgetAsync(keys);
+        const data = await redisClient.mGet(keys);
 
         const values = {};
 
@@ -123,7 +137,7 @@ function PettyCache() {
      */
     async function getFromRedis(key) {
         // Try to get value from Redis
-        const data = await getAsync(key);
+        const data = await redisClient.get(key);
 
         // Return if the key wasn't found in Redis
         if (data === null) {
@@ -297,8 +311,8 @@ function PettyCache() {
         // Get TTL based on specified options
         const ttl = getTtl(options);
 
-        // Redis does not have a MSETEX command so we batch commands: http://redis.js.org/#api-clientbatchcommands
-        const batch = redisClient.batch();
+        // Redis does not have a MSETEX command so we pipeline commands
+        const multi = redisClient.multi();
 
         Object.keys(values).forEach(key => {
             const value = values[key];
@@ -307,10 +321,10 @@ function PettyCache() {
             memoryCache.put(key, value, random(2000, 5000));
 
             // Add Redis command
-            batch.psetex(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
+            multi.pSetEx(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
         });
 
-        await util.promisify(batch.exec).call(batch);
+        await multi.execAsPipeline();
     };
 
     /**
@@ -321,7 +335,7 @@ function PettyCache() {
     this.del = async (key, ...rest) => {
         assertNoCallback('pettyCache.del', ...rest);
 
-        await delAsync(key);
+        await redisClient.del(key);
         memoryCache.del(key);
     };
 
@@ -506,7 +520,7 @@ function PettyCache() {
             options.ttl = Object.hasOwn(options, 'ttl') ? options.ttl : 1000;
 
             const attempt = async () => {
-                const res = await setAsync(key, '1', 'NX', 'PX', options.ttl);
+                const res = await redisClient.set(key, '1', { NX: true, PX: options.ttl });
 
                 if (!res) {
                     throw new Error();
@@ -538,7 +552,7 @@ function PettyCache() {
         unlock: async (key, ...rest) => {
             assertNoCallback('pettyCache.mutex.unlock', ...rest);
 
-            await delAsync(key);
+            await redisClient.del(key);
         }
     };
 
@@ -590,7 +604,7 @@ function PettyCache() {
                 await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
                 try {
-                    const data = await getAsync(key);
+                    const data = await redisClient.get(key);
 
                     // If we don't have a previously created semaphore, return error
                     if (!data) {
@@ -613,7 +627,7 @@ function PettyCache() {
 
                     pool[index] = { status: 'acquired', ttl: Date.now() + options.ttl };
 
-                    await setAsync(key, JSON.stringify(pool));
+                    await redisClient.set(key, JSON.stringify(pool));
 
                     return index;
                 } finally {
@@ -649,7 +663,7 @@ function PettyCache() {
             await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
             try {
-                const data = await getAsync(key);
+                const data = await redisClient.get(key);
 
                 // If we don't have a previously created semaphore, return error
                 if (!data) {
@@ -670,7 +684,7 @@ function PettyCache() {
                     pool[index] = { status: 'available' };
                 }
 
-                await setAsync(key, JSON.stringify(pool));
+                await redisClient.set(key, JSON.stringify(pool));
             } finally {
                 // Unlock errors are ignored; the mutex lock expires via its TTL
                 await this.mutex.unlock(`lock:${key}`).catch(() => {});
@@ -689,7 +703,7 @@ function PettyCache() {
             await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
             try {
-                const data = await getAsync(key);
+                const data = await redisClient.get(key);
 
                 // If we don't have a previously created semaphore, return error
                 if (!data) {
@@ -708,7 +722,7 @@ function PettyCache() {
 
                 pool = pool.concat(Array(size - pool.length).fill({ status: 'available' }));
 
-                await setAsync(key, JSON.stringify(pool));
+                await redisClient.set(key, JSON.stringify(pool));
             } finally {
                 // Unlock errors are ignored; the mutex lock expires via its TTL
                 await this.mutex.unlock(`lock:${key}`).catch(() => {});
@@ -727,7 +741,7 @@ function PettyCache() {
             await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
             try {
-                const data = await getAsync(key);
+                const data = await redisClient.get(key);
 
                 // If we don't have a previously created semaphore, return error
                 if (!data) {
@@ -743,7 +757,7 @@ function PettyCache() {
 
                 pool[index] = { status: 'available' };
 
-                await setAsync(key, JSON.stringify(pool));
+                await redisClient.set(key, JSON.stringify(pool));
             } finally {
                 // Unlock errors are ignored; the mutex lock expires via its TTL
                 await this.mutex.unlock(`lock:${key}`).catch(() => {});
@@ -762,7 +776,7 @@ function PettyCache() {
 
             try {
                 // Try to get previously created semaphore
-                const data = await getAsync(key);
+                const data = await redisClient.get(key);
 
                 // If we don't have a previously created semaphore, return error
                 if (!data) {
@@ -772,7 +786,7 @@ function PettyCache() {
                 let pool = JSON.parse(data);
                 pool = Array(pool.length).fill({ status: 'available' });
 
-                await setAsync(key, JSON.stringify(pool));
+                await redisClient.set(key, JSON.stringify(pool));
 
                 return pool;
             } finally {
@@ -795,7 +809,7 @@ function PettyCache() {
 
             try {
                 // Try to get previously created semaphore
-                const data = await getAsync(key);
+                const data = await redisClient.get(key);
 
                 // If we retreived a previously created semaphore, return it
                 if (data) {
@@ -812,7 +826,7 @@ function PettyCache() {
 
                 const pool = Array(Math.max(size, 1)).fill({ status: 'available' });
 
-                await setAsync(key, JSON.stringify(pool));
+                await redisClient.set(key, JSON.stringify(pool));
 
                 return pool;
             } finally {
@@ -840,7 +854,7 @@ function PettyCache() {
         memoryCache.put(key, value, random(2000, 5000));
 
         // Store value in Redis
-        await psetexAsync(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
+        await redisClient.pSetEx(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
     };
 }
 
