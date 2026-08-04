@@ -241,7 +241,7 @@ const value = await pettyCache.fetch('key', async () => {
 
 ### pettyCache.fetchAndRefresh(key, cacheMissFunction, [options, [callback]])
 
-Similar to `pettyCache.fetch` but this method continually refreshes the data in cache by executing the specified cacheMissFunction before the TTL expires. Note: the background refresh always calls `cacheMissFunction` with a callback, so it must accept a callback parameter (async functions without a callback parameter are not supported).
+Similar to `pettyCache.fetch` but this method continually refreshes the data in cache by executing the specified cacheMissFunction before the TTL expires. Supports both callbacks and promises.
 
 **Example**
 
@@ -251,6 +251,13 @@ pettyCache.fetchAndRefresh('key', function(callback) {
     fs.readFile('file.txt', callback);
 }, function(err, value) {
     console.log(value);
+});
+```
+
+```javascript
+const value = await pettyCache.fetchAndRefresh('key', async () => {
+    // This function is called on a cache miss and every TTL/2 milliseconds
+    return await fs.readFile('file.txt');
 });
 ```
 

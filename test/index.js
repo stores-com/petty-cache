@@ -1258,6 +1258,32 @@ test('petty-cache', { concurrency: true }, async (t) => {
 
             done();
         });
+
+        t.test('PettyCache.fetchAndRefresh should support async func and refresh it (promises)', async () => {
+            const key = Math.random().toString();
+            let numberOfFuncCalls = 0;
+
+            const func = async () => ++numberOfFuncCalls;
+
+            const data = await pettyCache.fetchAndRefresh(key, func, { ttl: 6000 });
+
+            assert.strictEqual(data, 1);
+
+            // Wait for the background refresh interval (ttl.min / 2)
+            await timers.setTimeout(3500);
+
+            assert.ok(numberOfFuncCalls >= 2, `func should have been called by the refresh interval (calls: ${numberOfFuncCalls})`);
+            assert.ok(await pettyCache.get(key) >= 2, 'the refreshed value should have been stored in cache');
+        });
+
+        t.test('PettyCache.fetchAndRefresh should reject if func returns error (promises)', async () => {
+            await assert.rejects(
+                pettyCache.fetchAndRefresh(Math.random().toString(), (callback) => {
+                    callback(new Error('PettyCache.fetchAndRefresh should reject if func returns error'));
+                }, { ttl: 6000 }),
+                { message: 'PettyCache.fetchAndRefresh should reject if func returns error' }
+            );
+        });
     });
 
     t.test('PettyCache.get', { concurrency: true }, async (t) => {

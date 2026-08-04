@@ -1,3 +1,5 @@
+const util = require('node:util');
+
 const async = require('async');
 const lock = require('lock').Lock();
 const memoryCache = require('memory-cache');
@@ -21,36 +23,35 @@ function PettyCache() {
     //eslint-disable-next-line no-console
     redisClient.on('error', err => console.warn(`Warning: Redis reported a client error: ${err}`));
 
+    // Promisify per call rather than once at construction so that wrappers applied to the
+    // client's methods later (APM instrumentation, test stubs) are respected
+    const getAsync = (...args) => util.promisify(redisClient.get).apply(redisClient, args);
+    const mgetAsync = (...args) => util.promisify(redisClient.mget).apply(redisClient, args);
+
     /**
      * Fetches multiple keys from Redis.
      * @param {string[]} keys
      * @returns {Promise<Object>} Resolves with an object mapping each key to {exists, value}.
      */
-    function bulkGetFromRedis(keys) {
-        return new Promise((resolve, reject) => {
-            // Try to get values from Redis
-            redisClient.mget(keys, (err, data) => {
-                if (err) {
-                    return reject(err);
-                }
+    async function bulkGetFromRedis(keys) {
+        // Try to get values from Redis
+        const data = await mgetAsync(keys);
 
-                const values = {};
+        const values = {};
 
-                for (let i = 0; i < keys.length; i++) {
-                    const key = keys[i];
-                    const value = data[i];
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            const value = data[i];
 
-                    if (value === null) {
-                        values[key] = { exists: false };
-                        continue;
-                    }
+            if (value === null) {
+                values[key] = { exists: false };
+                continue;
+            }
 
-                    values[key] = { exists: true, value: PettyCache.parse(value) };
-                }
+            values[key] = { exists: true, value: PettyCache.parse(value) };
+        }
 
-                resolve(values);
-            });
-        });
+        return values;
     }
 
     /**
@@ -81,22 +82,16 @@ function PettyCache() {
      * @param {string} key
      * @returns {Promise<{exists: boolean, value: *}>}
      */
-    function getFromRedis(key) {
-        return new Promise((resolve, reject) => {
-            // Try to get value from Redis
-            redisClient.get(key, (err, data) => {
-                if (err) {
-                    return reject(err);
-                }
+    async function getFromRedis(key) {
+        // Try to get value from Redis
+        const data = await getAsync(key);
 
-                // Return if the key wasn't found in Redis
-                if (data === null) {
-                    return resolve({ exists: false });
-                }
+        // Return if the key wasn't found in Redis
+        if (data === null) {
+            return { exists: false };
+        }
 
-                resolve({ exists: true, value: PettyCache.parse(data) });
-            });
-        });
+        return { exists: true, value: PettyCache.parse(data) };
     }
 
     /**
@@ -422,23 +417,7 @@ function PettyCache() {
                     }
 
                     // Execute the specified function and place the results in cache before returning the data
-                    let data;
-
-                    if (func.length === 0) {
-                        // If the function doesn't have any arguments, there wasn't a callback provided
-                        data = await func();
-                    } else {
-                        // If the function has arguments, there was a callback provided
-                        data = await new Promise((resolve, reject) => {
-                            func((err, data) => {
-                                if (err) {
-                                    return reject(err);
-                                }
-
-                                resolve(data);
-                            });
-                        });
-                    }
+                    const data = await executeFunc(func);
 
                     await this.set(key, data, options);
 
@@ -460,12 +439,14 @@ function PettyCache() {
 
     /**
      * Like fetch(), but also sets up a background interval to proactively refresh the cached value
-     * before it expires, preventing cache misses under sustained load.
+     * before it expires, preventing cache misses under sustained load. Supports async and callback
+     * func signatures, and both callback and promise styles.
      * @param {string} key - The cache key.
-     * @param {Function} func - Called on cache miss and on each refresh interval: func(callback).
+     * @param {Function} func - Called on cache miss and on each refresh interval. Use func(callback) for callbacks or async func() for promises.
      * @param {Object} [options] - Optional settings.
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
-     * @param {Function} [callback] - Optional callback(err, value). Defaults to a noop.
+     * @param {Function} [callback] - Optional callback(err, value). If omitted, returns a Promise.
+     * @returns {Promise|undefined} Resolves with the cached or newly fetched value.
      */
     this.fetchAndRefresh = (key, func, options = {}, callback) => {
         if (typeof options === 'function') {
@@ -476,34 +457,31 @@ function PettyCache() {
         // Get TTL based on specified options
         const ttl = getTtl(options);
 
-        // Default callback is a noop
-        callback = callback || (() => {});
-
         const _this = this;
 
         if (!intervals[key]) {
             const delay = ttl.min / 2;
 
-            intervals[key] = setInterval(() => {
+            intervals[key] = setInterval(async () => {
                 // This distributed lock prevents multiple clients from executing func at the same time
-                _this.mutex.lock(`interval-${key}`, { ttl: delay - 100 }, (err) => {
-                    if (err) {
-                        return;
-                    }
+                try {
+                    await _this.mutex.lock(`interval-${key}`, { ttl: delay - 100 });
+                } catch (err) {
+                    return;
+                }
 
-                    // Execute the specified function and update cache
-                    func((err, data) => {
-                        if (err) {
-                            return;
-                        }
+                // Execute the specified function and update cache, trying again next interval on failure
+                try {
+                    const data = await executeFunc(func);
 
-                        _this.set(key, data, options);
-                    });
-                });
+                    await _this.set(key, data, options);
+                } catch (err) {
+                    return;
+                }
             }, delay);
         }
 
-        this.fetch(key, func, options, callback);
+        return this.fetch(key, func, options, callback);
     };
 
     /**
@@ -1074,6 +1052,29 @@ function PettyCache() {
 function acquireLock(key) {
     return new Promise(resolve => {
         lock(key, release => resolve(release()));
+    });
+}
+
+/**
+ * Executes a cache-miss function, supporting both async and callback signatures.
+ * @param {Function} func - Use func(callback) for callbacks or async func() for promises.
+ * @returns {Promise<*>} Resolves with the value produced by func.
+ */
+async function executeFunc(func) {
+    // If the function doesn't have any arguments, there wasn't a callback provided
+    if (func.length === 0) {
+        return func();
+    }
+
+    // If the function has arguments, there was a callback provided
+    return new Promise((resolve, reject) => {
+        func((err, data) => {
+            if (err) {
+                return reject(err);
+            }
+
+            resolve(data);
+        });
     });
 }
 
