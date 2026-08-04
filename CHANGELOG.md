@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ## [5.0.0] - 2026-08-04
+### Added
+- `pettyCache.close()` stops the background refresh intervals started by `fetchAndRefresh` and gracefully closes the Redis client connection.
 ### Changed
 - Callback support is removed. Every function returns a promise; passing a callback rejects with a `TypeError`.
 - Cache-miss functions and `retrieveOrCreate`'s `size` option must be async (or plain-return) functions; callback-style functions are no longer supported.

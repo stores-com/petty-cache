@@ -144,6 +144,16 @@ await pettyCache.bulkSet({ key1: 'one', key2: 2, key3: 'three' });
 }
 ```
 
+### pettyCache.close()
+
+Stops the background refresh intervals started by `pettyCache.fetchAndRefresh` and gracefully closes the Redis client connection.
+
+**Example**
+
+```javascript
+await pettyCache.close();
+```
+
 ### pettyCache.del(key)
 
 Deletes a value from both the in-memory cache and Redis.

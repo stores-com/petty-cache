@@ -324,6 +324,24 @@ function PettyCache() {
     };
 
     /**
+     * Stops the background refresh intervals started by fetchAndRefresh and gracefully
+     * closes the Redis client connection.
+     * @returns {Promise}
+     */
+    this.close = async (...rest) => {
+        assertNoCallback('pettyCache.close', ...rest);
+
+        Object.keys(intervals).forEach(key => {
+            clearInterval(intervals[key]);
+            delete intervals[key];
+        });
+
+        if (redisClient.isOpen) {
+            await redisClient.close();
+        }
+    };
+
+    /**
      * Deletes a key from both the memory cache and Redis.
      * @param {string} key - The cache key to delete.
      * @returns {Promise}

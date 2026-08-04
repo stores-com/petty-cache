@@ -2571,6 +2571,7 @@ test('PettyCache should reject callback-style usage with a TypeError', async () 
     await assert.rejects(pettyCache.bulkFetch(['k'], async () => ({}), {}, noop), TypeError);
     await assert.rejects(pettyCache.bulkGet(['k'], noop), TypeError);
     await assert.rejects(pettyCache.bulkSet({ k: 1 }, noop), TypeError);
+    await assert.rejects(pettyCache.close(noop), TypeError);
     await assert.rejects(pettyCache.del('k', noop), TypeError);
     await assert.rejects(pettyCache.fetch('k', async () => 'v', noop), TypeError);
     await assert.rejects(pettyCache.fetchAndRefresh('k', async () => 'v', noop), TypeError);
@@ -2585,4 +2586,21 @@ test('PettyCache should reject callback-style usage with a TypeError', async () 
     await assert.rejects(pettyCache.semaphore.reset('k', noop), TypeError);
     await assert.rejects(pettyCache.semaphore.retrieveOrCreate('k', noop), TypeError);
     await assert.rejects(pettyCache.set('k', 'v', noop), TypeError);
+});
+
+test('PettyCache.close should stop refresh intervals and close the client', async () => {
+    const client = redis.createClient();
+    const newPettyCache = new PettyCache(client);
+    const key = Math.random().toString();
+
+    const data = await newPettyCache.fetchAndRefresh(key, async () => 'value');
+
+    assert.strictEqual(data, 'value');
+
+    await newPettyCache.close();
+
+    assert.strictEqual(client.isOpen, false);
+
+    // Closing again is a no-op
+    await newPettyCache.close();
 });
