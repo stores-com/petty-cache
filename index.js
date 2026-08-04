@@ -1,3 +1,4 @@
+const timers = require('node:timers/promises');
 const util = require('node:util');
 
 const async = require('async');
@@ -27,6 +28,7 @@ function PettyCache() {
     // client's methods later (APM instrumentation, test stubs) are respected
     const getAsync = (...args) => util.promisify(redisClient.get).apply(redisClient, args);
     const mgetAsync = (...args) => util.promisify(redisClient.mget).apply(redisClient, args);
+    const setAsync = (...args) => util.promisify(redisClient.set).apply(redisClient, args);
 
     /**
      * Fetches multiple keys from Redis.
@@ -675,13 +677,15 @@ function PettyCache() {
     this.semaphore = {
         /**
          * Acquires a slot in an existing semaphore pool. Retries if no slot is currently available.
+         * Supports both callback and promise styles.
          * @param {string} key - The semaphore key.
          * @param {Object} [options] - Optional settings.
          * @param {number} [options.ttl=1000] - Slot TTL in ms; expired slots may be reclaimed.
          * @param {Object} [options.retry] - Retry options.
          * @param {number} [options.retry.times=1] - Number of acquisition attempts.
          * @param {number} [options.retry.interval=100] - Delay between retries in ms.
-         * @param {Function} callback - callback(err, index) where index is the acquired slot number.
+         * @param {Function} [callback] - Optional callback(err, index). If omitted, returns a Promise.
+         * @returns {Promise|undefined} Resolves with the acquired slot index.
          */
         acquireLock: (key, options = {}, callback) => {
             // Options are optional
@@ -695,87 +699,89 @@ function PettyCache() {
             options.retry.times = Object.prototype.hasOwnProperty.call(options.retry, 'times') ? options.retry.times : 1;
             options.ttl = Object.prototype.hasOwnProperty.call(options, 'ttl') ? options.ttl : 1000;
 
-            const _this = this;
-
-            async.retry({ interval: options.retry.interval, times: options.retry.times }, (callback) => {
+            const attempt = async () => {
                 // Mutex lock around semaphore
-                _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
-                    if (err) {
-                        return callback(err);
+                await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
+
+                try {
+                    const data = await getAsync(key);
+
+                    // If we don't have a previously created semaphore, return error
+                    if (!data) {
+                        throw new Error(`Semaphore ${key} doesn't exist.`);
                     }
 
-                    redisClient.get(key, (err, data) => {
-                        // If we encountered an error, unlock the mutex lock and return error
-                        if (err) {
-                            return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
+                    const pool = JSON.parse(data);
+
+                    // Try to find a slot that's available.
+                    let index = pool.findIndex(s => s.status === 'available');
+
+                    if (index === -1) {
+                        index = pool.findIndex(s => s.ttl <= Date.now());
+                    }
+
+                    // If we don't have an available slot, return error
+                    if (index === -1) {
+                        throw new Error(`Semaphore ${key} doesn't have any available slots.`);
+                    }
+
+                    pool[index] = { status: 'acquired', ttl: Date.now() + options.ttl };
+
+                    await setAsync(key, JSON.stringify(pool));
+
+                    return index;
+                } finally {
+                    // Unlock errors are ignored; the mutex lock expires via its TTL
+                    await this.mutex.unlock(`lock:${key}`).catch(() => {});
+                }
+            };
+
+            const executor = async () => {
+                for (let attempts = options.retry.times; ; attempts--) {
+                    try {
+                        return await attempt();
+                    } catch (err) {
+                        if (attempts <= 1) {
+                            throw err;
                         }
 
-                        // If we don't have a previously created semaphore, unlock the mutex lock and return error
-                        if (!data) {
-                            return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Semaphore ${key} doesn't exist.`)); });
-                        }
+                        await timers.setTimeout(options.retry.interval);
+                    }
+                }
+            };
 
-                        const pool = JSON.parse(data);
-
-                        // Try to find a slot that's available.
-                        let index = pool.findIndex(s => s.status === 'available');
-
-                        if (index === -1) {
-                            index = pool.findIndex(s => s.ttl <= Date.now());
-                        }
-
-                        // If we don't have a previously created semaphore, unlock the mutex lock and return error
-                        if (index === -1) {
-                            return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Semaphore ${key} doesn't have any available slots.`)); });
-                        }
-
-                        pool[index] = { status: 'acquired', ttl: Date.now() + options.ttl };
-
-                        redisClient.set(key, JSON.stringify(pool), (err) => {
-                            if (err) {
-                                return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                            }
-
-                            _this.mutex.unlock(`lock:${key}`, () => { callback(null, index); });
-                        });
-                    });
-                });
-            }, callback);
+            if (callback) {
+                executor().then(result => callback(null, result)).catch(callback);
+            } else {
+                return executor();
+            }
         },
         /**
          * Permanently consumes a semaphore slot, marking it consumed rather than available.
-         * Ensures at least one slot always remains non-consumed.
+         * Ensures at least one slot always remains non-consumed. Supports both callback and promise styles.
          * @param {string} key - The semaphore key.
          * @param {number} index - The slot index to consume.
-         * @param {Function} [callback] - Optional callback(err). Defaults to a noop.
+         * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
+         * @returns {Promise|undefined}
          */
         consumeLock: (key, index, callback) => {
-            callback = callback || (() => {});
+            const executor = async () => {
+                // Mutex lock around semaphore
+                await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
-            const _this = this;
+                try {
+                    const data = await getAsync(key);
 
-            // Mutex lock around semaphore
-            _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
-                if (err) {
-                    return callback(err);
-                }
-
-                redisClient.get(key, (err, data) => {
-                    // If we encountered an error, unlock the mutex lock and return error
-                    if (err) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                    }
-
-                    // If we don't have a previously created semaphore, unlock the mutex lock and return error
+                    // If we don't have a previously created semaphore, return error
                     if (!data) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Semaphore ${key} doesn't exist.`)); });
+                        throw new Error(`Semaphore ${key} doesn't exist.`);
                     }
 
                     const pool = JSON.parse(data);
 
                     // Ensure index exists.
                     if (pool.length <= index) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Index ${index} for semaphore ${key} is invalid.`)); });
+                        throw new Error(`Index ${index} for semaphore ${key} is invalid.`);
                     }
 
                     pool[index] = { status: 'consumed' };
@@ -785,159 +791,155 @@ function PettyCache() {
                         pool[index] = { status: 'available' };
                     }
 
-                    redisClient.set(key, JSON.stringify(pool), (err) => {
-                        if (err) {
-                            return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                        }
+                    await setAsync(key, JSON.stringify(pool));
+                } finally {
+                    // Unlock errors are ignored; the mutex lock expires via its TTL
+                    await this.mutex.unlock(`lock:${key}`).catch(() => {});
+                }
+            };
 
-                        _this.mutex.unlock(`lock:${key}`, () => { callback(); });
-                    });
-                });
-            });
+            if (callback) {
+                executor().then(result => callback(null, result)).catch(callback);
+            } else {
+                return executor();
+            }
         },
         /**
          * Increases the size of an existing semaphore pool. Cannot shrink a pool.
+         * Supports both callback and promise styles.
          * @param {string} key - The semaphore key.
          * @param {number} size - The desired pool size (must be >= current size).
-         * @param {Function} [callback] - Optional callback(err). Defaults to a noop.
+         * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
+         * @returns {Promise|undefined}
          */
         expand: (key, size, callback) => {
-            callback = callback || (() => {});
+            const executor = async () => {
+                // Mutex lock around semaphore
+                await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
-            const _this = this;
+                try {
+                    const data = await getAsync(key);
 
-            _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
-                if (err) {
-                    return callback(err);
-                }
-
-                redisClient.get(key, (err, data) => {
-                    // If we encountered an error, unlock the mutex lock and return error
-                    if (err) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                    }
-
-                    // If we don't have a previously created semaphore, unlock the mutex lock and return error
+                    // If we don't have a previously created semaphore, return error
                     if (!data) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Semaphore ${key} doesn't exist.`)); });
+                        throw new Error(`Semaphore ${key} doesn't exist.`);
                     }
 
                     let pool = JSON.parse(data);
 
                     if (pool.length > size) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Cannot shrink pool, size is ${pool.length} and you requested a size of ${size}.`)); });
+                        throw new Error(`Cannot shrink pool, size is ${pool.length} and you requested a size of ${size}.`);
                     }
 
                     if (pool.length === size) {
-                        return _this.mutex.unlock(`lock:${key}`, () => callback());
+                        return;
                     }
 
                     pool = pool.concat(Array(size - pool.length).fill({ status: 'available' }));
 
-                    redisClient.set(key, JSON.stringify(pool), (err) => {
-                        if (err) {
-                            return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                        }
+                    await setAsync(key, JSON.stringify(pool));
+                } finally {
+                    // Unlock errors are ignored; the mutex lock expires via its TTL
+                    await this.mutex.unlock(`lock:${key}`).catch(() => {});
+                }
+            };
 
-                        _this.mutex.unlock(`lock:${key}`, () => { callback(); });
-                    });
-                });
-            });
+            if (callback) {
+                executor().then(result => callback(null, result)).catch(callback);
+            } else {
+                return executor();
+            }
         },
         /**
          * Releases an acquired semaphore slot, marking it available again.
+         * Supports both callback and promise styles.
          * @param {string} key - The semaphore key.
          * @param {number} index - The slot index to release.
-         * @param {Function} [callback] - Optional callback(err). Defaults to a noop.
+         * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
+         * @returns {Promise|undefined}
          */
         releaseLock: (key, index, callback) => {
-            callback = callback || (() => {});
+            const executor = async () => {
+                // Mutex lock around semaphore
+                await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
-            const _this = this;
+                try {
+                    const data = await getAsync(key);
 
-            // Mutex lock around semaphore
-            _this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
-                if (err) {
-                    return callback(err);
-                }
-
-                redisClient.get(key, (err, data) => {
-                    // If we encountered an error, unlock the mutex lock and return error
-                    if (err) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                    }
-
-                    // If we don't have a previously created semaphore, unlock the mutex lock and return error
+                    // If we don't have a previously created semaphore, return error
                     if (!data) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Semaphore ${key} doesn't exist.`)); });
+                        throw new Error(`Semaphore ${key} doesn't exist.`);
                     }
 
                     const pool = JSON.parse(data);
 
                     // Ensure index exists.
                     if (pool.length <= index) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Index ${index} for semaphore ${key} is invalid.`)); });
+                        throw new Error(`Index ${index} for semaphore ${key} is invalid.`);
                     }
 
                     pool[index] = { status: 'available' };
 
-                    redisClient.set(key, JSON.stringify(pool), (err) => {
-                        if (err) {
-                            return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                        }
+                    await setAsync(key, JSON.stringify(pool));
+                } finally {
+                    // Unlock errors are ignored; the mutex lock expires via its TTL
+                    await this.mutex.unlock(`lock:${key}`).catch(() => {});
+                }
+            };
 
-                        _this.mutex.unlock(`lock:${key}`, () => { callback(); });
-                    });
-                });
-            });
+            if (callback) {
+                executor().then(result => callback(null, result)).catch(callback);
+            } else {
+                return executor();
+            }
         },
         /**
          * Resets all slots in an existing semaphore pool to available.
+         * Supports both callback and promise styles.
          * @param {string} key - The semaphore key.
-         * @param {Function} [callback] - Optional callback(err, pool). Defaults to a noop.
+         * @param {Function} [callback] - Optional callback(err, pool). If omitted, returns a Promise.
+         * @returns {Promise|undefined} Resolves with the reset pool.
          */
         reset: (key, callback) => {
-            callback = callback || (() => {});
+            const executor = async () => {
+                // Mutex lock around semaphore
+                await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
-            const _this = this;
+                try {
+                    // Try to get previously created semaphore
+                    const data = await getAsync(key);
 
-            // Mutex lock around semaphore
-            this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
-                if (err) {
-                    return callback(err);
-                }
-
-                // Try to get previously created semaphore
-                redisClient.get(key, (err, data) => {
-                    // If we encountered an error, unlock the mutex lock and return error
-                    if (err) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                    }
-
-                    // If we don't have a previously created semaphore, unlock the mutex lock and return error
+                    // If we don't have a previously created semaphore, return error
                     if (!data) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(new Error(`Semaphore ${key} doesn't exist.`)); });
+                        throw new Error(`Semaphore ${key} doesn't exist.`);
                     }
 
                     let pool = JSON.parse(data);
                     pool = Array(pool.length).fill({ status: 'available' });
 
-                    redisClient.set(key, JSON.stringify(pool), (err) => {
-                        if (err) {
-                            return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                        }
+                    await setAsync(key, JSON.stringify(pool));
 
-                        _this.mutex.unlock(`lock:${key}`, () => { callback(null, pool); });
-                    });
-                });
-            });
+                    return pool;
+                } finally {
+                    // Unlock errors are ignored; the mutex lock expires via its TTL
+                    await this.mutex.unlock(`lock:${key}`).catch(() => {});
+                }
+            };
+
+            if (callback) {
+                executor().then(result => callback(null, result)).catch(callback);
+            } else {
+                return executor();
+            }
         },
         /**
          * Retrieves an existing semaphore pool, or creates one if it doesn't exist.
+         * Supports both callback and promise styles.
          * @param {string} key - The semaphore key.
          * @param {Object} [options] - Optional settings.
-         * @param {number|Function} [options.size=1] - Pool size, or a function(callback) that resolves the size.
-         * @param {Function} [callback] - Optional callback(err, pool). Defaults to a noop.
+         * @param {number|Function} [options.size=1] - Pool size, or a function that resolves the size. Use size(callback) for callbacks or async size() for promises.
+         * @param {Function} [callback] - Optional callback(err, pool). If omitted, returns a Promise.
+         * @returns {Promise|undefined} Resolves with the semaphore pool.
          */
         retrieveOrCreate: (key, options = {}, callback) => {
             // Options are optional
@@ -946,54 +948,43 @@ function PettyCache() {
                 options = {};
             }
 
-            callback = callback || (() => {});
+            const executor = async () => {
+                // Mutex lock around semaphore retrival or creation
+                await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
-            const _this = this;
+                try {
+                    // Try to get previously created semaphore
+                    const data = await getAsync(key);
 
-            // Mutex lock around semaphore retrival or creation
-            this.mutex.lock(`lock:${key}`, { retry: { times: 100 } }, (err) => {
-                if (err) {
-                    return callback(err);
-                }
-
-                // Try to get previously created semaphore
-                redisClient.get(key, (err, data) => {
-                    // If we encountered an error, unlock the mutex lock and return error
-                    if (err) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                    }
-
-                    // If we retreived a previously created semaphore, unlock the mutex lock and return
+                    // If we retreived a previously created semaphore, return it
                     if (data) {
-                        return _this.mutex.unlock(`lock:${key}`, () => { callback(null, JSON.parse(data)); });
+                        return JSON.parse(data);
                     }
 
-                    const getSize = (callback) => {
-                        if (typeof options.size === 'function') {
-                            return options.size(callback);
-                        }
+                    let size;
 
-                        callback(null, Object.prototype.hasOwnProperty.call(options, 'size') ? options.size : 1);
-                    };
+                    if (typeof options.size === 'function') {
+                        size = await executeFunc(options.size);
+                    } else {
+                        size = Object.prototype.hasOwnProperty.call(options, 'size') ? options.size : 1;
+                    }
 
-                    getSize((err, size) => {
-                        // If we encountered an error, unlock the mutex lock and return error
-                        if (err) {
-                            return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                        }
+                    const pool = Array(Math.max(size, 1)).fill({ status: 'available' });
 
-                        const pool = Array(Math.max(size, 1)).fill({ status: 'available' });
+                    await setAsync(key, JSON.stringify(pool));
 
-                        redisClient.set(key, JSON.stringify(pool), (err) => {
-                            if (err) {
-                                return _this.mutex.unlock(`lock:${key}`, () => { callback(err); });
-                            }
+                    return pool;
+                } finally {
+                    // Unlock errors are ignored; the mutex lock expires via its TTL
+                    await this.mutex.unlock(`lock:${key}`).catch(() => {});
+                }
+            };
 
-                            _this.mutex.unlock(`lock:${key}`, () => { callback(null, pool); });
-                        });
-                    });
-                });
-            });
+            if (callback) {
+                executor().then(result => callback(null, result)).catch(callback);
+            } else {
+                return executor();
+            }
         }
     };
 
@@ -1038,10 +1029,6 @@ function PettyCache() {
         }
     };
 
-    // Semaphore functions need to be bound to the main PettyCache object
-    for (const method in this.semaphore) {
-        this.semaphore[method] = this.semaphore[method].bind(this);
-    }
 }
 
 /**

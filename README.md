@@ -476,7 +476,7 @@ pettyCache.semaphore.retrieveOrCreate('key', { size: 10 }, function(err) {
 
 ### pettyCache.semaphore.acquireLock(key, [options, [callback]])
 
-Attempts to acquire a lock from the semaphore's pool. Optionally retries a specified number of times by waiting a specified amount of time between attempts.
+Attempts to acquire a lock from the semaphore's pool. Optionally retries a specified number of times by waiting a specified amount of time between attempts. Supports both callbacks and promises.
 
 ```javascript
 // Acquire a lock from the semaphore's pool
@@ -487,6 +487,10 @@ pettyCache.semaphore.acquireLock('key', { retry: { interval: 100, times: 5 }, tt
 
     // We were able to acquire a lock from the semaphore's pool. Do work and then release the lock.
 });
+```
+
+```javascript
+const index = await pettyCache.semaphore.acquireLock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 });
 ```
 
 **Options**
@@ -503,7 +507,7 @@ pettyCache.semaphore.acquireLock('key', { retry: { interval: 100, times: 5 }, tt
 
 ### pettyCache.semaphore.consumeLock(key, index, [callback])
 
-Mark the lock at the specified index as "consumed" to prevent it from being used again.
+Mark the lock at the specified index as "consumed" to prevent it from being used again. Supports both callbacks and promises.
 
 ```javascript
 pettyCache.semaphore.consumeLock('key', index, function(err) {
@@ -513,9 +517,13 @@ pettyCache.semaphore.consumeLock('key', index, function(err) {
 });
 ```
 
+```javascript
+await pettyCache.semaphore.consumeLock('key', index);
+```
+
 ### pettyCache.semaphore.expand(key, size, [callback])
 
-Expand the number of locks in the specified semaphore's pool.
+Expand the number of locks in the specified semaphore's pool. Supports both callbacks and promises.
 
 ```javascript
 pettyCache.semaphore.expand(key, 100, function(err) {
@@ -525,9 +533,13 @@ pettyCache.semaphore.expand(key, 100, function(err) {
 });
 ```
 
+```javascript
+await pettyCache.semaphore.expand(key, 100);
+```
+
 ### pettyCache.semaphore.releaseLock(key, index, [callback])
 
-Releases the lock at the specified index back to the semaphore's pool so that it can be used again.
+Releases the lock at the specified index back to the semaphore's pool so that it can be used again. Supports both callbacks and promises.
 
 ```javascript
 pettyCache.semaphore.releaseLock('key', index, function(err) {
@@ -537,9 +549,13 @@ pettyCache.semaphore.releaseLock('key', index, function(err) {
 });
 ```
 
+```javascript
+await pettyCache.semaphore.releaseLock('key', index);
+```
+
 ### pettyCache.semaphore.reset(key, [callback])
 
-Resets all locks in the semaphore's pool to available, releasing them all (even those that have been marked as "consumed"). The pool keeps its current size, including any expansions.
+Resets all locks in the semaphore's pool to available, releasing them all (even those that have been marked as "consumed"). The pool keeps its current size, including any expansions. Supports both callbacks and promises.
 
 ```javascript
 pettyCache.semaphore.reset('key', function(err) {
@@ -549,9 +565,13 @@ pettyCache.semaphore.reset('key', function(err) {
 });
 ```
 
+```javascript
+const pool = await pettyCache.semaphore.reset('key');
+```
+
 ### pettyCache.semaphore.retrieveOrCreate(key, [options, [callback]])
 
-Retrieves a previously created semaphore or creates a new semaphore with the optionally specified number of locks in its pool.
+Retrieves a previously created semaphore or creates a new semaphore with the optionally specified number of locks in its pool. Supports both callbacks and promises.
 
 ```javascript
 // Create a new semaphore
@@ -563,10 +583,15 @@ pettyCache.semaphore.retrieveOrCreate('key', { size: 10 }, function(err) {
     // Your semaphore was created.
 });
 ```
+
+```javascript
+const semaphore = await pettyCache.semaphore.retrieveOrCreate('key', { size: 10 });
+```
+
 **Options**
 
 ```javascript
 {
-    size: 1 || function() { const x = 1 + 1; callback(null, x); } // The number of locks to create in the semaphore's pool. Optionally, size can be a `callback(err, size)` function.
+    size: 1 || function() { const x = 1 + 1; callback(null, x); } // The number of locks to create in the semaphore's pool. Optionally, size can be a `callback(err, size)` function or an async function.
 }
 ```
