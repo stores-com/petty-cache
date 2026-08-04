@@ -9,7 +9,7 @@ A cache module for Node.js that uses a two-level cache (in-memory cache for rece
 
 Also includes mutex and semaphore distributed locking primitives.
 
-As of v5, every function returns a promise and callbacks are no longer supported — passing a callback rejects with a `TypeError`. Cache-miss functions must be async (or plain-return) functions. If you need callback support, use v4, which supports both styles and emits deprecation warnings for callback usage.
+As of v5, every function returns a promise and callbacks are no longer supported — passing a callback rejects with a `TypeError`. Cache-miss functions must be async (or plain-return) functions. If you need callback support, use v4, which supports both styles and emits deprecation warnings for callback usage. See the [v4 to v5 migration guide](docs/v4-to-v5.md).
 
 ## Features
 

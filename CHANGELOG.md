@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ## [5.0.0] - 2026-08-04
+See the [v4 to v5 migration guide](docs/v4-to-v5.md).
 ### Added
 - `pettyCache.close()` stops the background refresh intervals started by `fetchAndRefresh` and gracefully closes the Redis client connection.
 ### Changed
