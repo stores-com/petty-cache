@@ -311,20 +311,16 @@ function PettyCache() {
         // Get TTL based on specified options
         const ttl = getTtl(options);
 
-        // Redis does not have a MSETEX command so we pipeline commands
-        const multi = redisClient.multi();
-
-        Object.keys(values).forEach(key => {
+        // Redis does not have an MSETEX command; individual PSETEX commands issued in the
+        // same tick are automatically pipelined into a single round trip by node-redis
+        await Promise.all(Object.keys(values).map(key => {
             const value = values[key];
 
             // Store value in memory cache with a short expiration
             memoryCache.put(key, value, random(2000, 5000));
 
-            // Add Redis command
-            multi.pSetEx(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
-        });
-
-        await multi.execAsPipeline();
+            return redisClient.pSetEx(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
+        }));
     };
 
     /**

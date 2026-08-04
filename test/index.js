@@ -1955,15 +1955,11 @@ test('PettyCache.bulkGet should return error if Redis MGET fails', async () => {
     stubClient.mGet = originalMGet;
 });
 
-test('PettyCache.bulkSet should return error if Redis batch exec fails', async () => {
+test('PettyCache.bulkSet should return error if Redis PSETEX fails', async () => {
     const stubClient = redis.createClient();
-    const originalMulti = stubClient.multi.bind(stubClient);
+    const originalPSetEx = stubClient.pSetEx.bind(stubClient);
 
-    stubClient.multi = () => {
-        const multi = originalMulti();
-        multi.execAsPipeline = () => Promise.reject(new Error('Redis EXEC error'));
-        return multi;
-    };
+    stubClient.pSetEx = () => Promise.reject(new Error('Redis PSETEX error'));
 
     const pettyCache = new PettyCache(stubClient);
     const values = {};
@@ -1971,21 +1967,17 @@ test('PettyCache.bulkSet should return error if Redis batch exec fails', async (
 
     await assert.rejects(
         pettyCache.bulkSet(values),
-        { message: 'Redis EXEC error' }
+        { message: 'Redis PSETEX error' }
     );
 
-    stubClient.multi = originalMulti;
+    stubClient.pSetEx = originalPSetEx;
 });
 
 test('PettyCache.bulkFetch should return error if bulkSet fails', async () => {
     const stubClient = redis.createClient();
-    const originalMulti = stubClient.multi.bind(stubClient);
+    const originalPSetEx = stubClient.pSetEx.bind(stubClient);
 
-    stubClient.multi = () => {
-        const multi = originalMulti();
-        multi.execAsPipeline = () => Promise.reject(new Error('Redis EXEC error'));
-        return multi;
-    };
+    stubClient.pSetEx = () => Promise.reject(new Error('Redis PSETEX error'));
 
     const pettyCache = new PettyCache(stubClient);
     const key = Math.random().toString();
@@ -1996,10 +1988,10 @@ test('PettyCache.bulkFetch should return error if bulkSet fails', async () => {
             data[keys[0]] = 'value';
             return data;
         }),
-        { message: 'Redis EXEC error' }
+        { message: 'Redis PSETEX error' }
     );
 
-    stubClient.multi = originalMulti;
+    stubClient.pSetEx = originalPSetEx;
 });
 
 test('PettyCache.mutex.lock should return error if Redis SET fails', async () => {
