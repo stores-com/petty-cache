@@ -6,15 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.8.0] - 2026-08-03
+## [4.0.0] - 2026-08-03
 ### Changed
-- Added the ability for the `pettyCache.fetch` function to support callbacks and promises.
-- Added the ability for the `pettyCache.fetchAndRefresh` function to support callbacks and promises, including async cache-miss functions on background refresh.
-- Added the ability for the `pettyCache.semaphore` functions to support callbacks and promises, including async `options.size` functions for `retrieveOrCreate`.
-- Modernized the internals of `fetch`, `fetchAndRefresh`, `get`, `bulkGet`, `bulkFetch`, and the `semaphore` functions to async/await.
+- Every function now supports both callbacks and promises (async/await) — omit the callback to receive a promise. This includes cache-miss functions and `retrieveOrCreate`'s `size` option, which may now be async functions.
+- Callback support is deprecated and will be removed in v5.
 ### Fixed
-- A cache-miss function passed to `fetch` that throws synchronously no longer leaves the in-process locks for that key held forever.
-- Background refresh failures in `fetchAndRefresh` no longer produce unhandled promise rejections when updating cache fails.
+- A cache-miss function that throws synchronously no longer leaves the in-process locks for its key held forever.
+- Background refresh failures in `fetchAndRefresh` no longer produce unhandled promise rejections.
 
 ## [3.7.0] - 2026-03-12
 ### Changed

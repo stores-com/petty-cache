@@ -349,6 +349,31 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.deepEqual(values, { [key]: 'value' });
         });
 
+        t.test('PettyCache.bulkFetch should support async func (promises)', async () => {
+            const key1 = Math.random().toString();
+            const key2 = Math.random().toString();
+
+            await pettyCache.set(key1, '1');
+
+            const values = await pettyCache.bulkFetch([key1, key2], async (keys) => {
+                const result = {};
+                keys.forEach(k => { result[k] = 'value'; });
+                return result;
+            });
+
+            assert.strictEqual(values[key1], '1');
+            assert.strictEqual(values[key2], 'value');
+        });
+
+        t.test('PettyCache.bulkFetch should reject if async func throws error (promises)', async () => {
+            await assert.rejects(
+                pettyCache.bulkFetch([Math.random().toString()], async () => {
+                    throw new Error('PettyCache.bulkFetch should reject if async func throws error');
+                }),
+                { message: 'PettyCache.bulkFetch should reject if async func throws error' }
+            );
+        });
+
         t.test('PettyCache.bulkFetch should run func again after TTL', (t, done) => {
             const keys = [Math.random().toString(), Math.random().toString()];
             let numberOfFuncCalls = 0;

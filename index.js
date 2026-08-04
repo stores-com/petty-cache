@@ -131,7 +131,7 @@ function PettyCache() {
      * Returns data from cache for each key if available; otherwise executes func for the missing keys
      * and stores the results in cache before returning. Supports both callback and promise styles.
      * @param {Array} keys - An array of cache keys.
-     * @param {Function} func - Function called with missing keys and a callback: (keys, callback).
+     * @param {Function} func - Called with the missing keys. Use func(keys, callback) for callbacks or async func(keys) for promises.
      * @param {Object} [options] - Optional settings.
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
      * @param {Function} [callback] - Optional callback(err, values). If omitted, returns a Promise.
@@ -190,15 +190,7 @@ function PettyCache() {
             }
 
             // Execute the specified function for remaining keys
-            const data = await new Promise((resolve, reject) => {
-                func(_keys, (err, data) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    resolve(data);
-                });
-            });
+            const data = await executeFunc(func, _keys);
 
             Object.keys(data).forEach(key => values[key] = data[key]);
 
@@ -1044,18 +1036,19 @@ function acquireLock(key) {
 
 /**
  * Executes a cache-miss function, supporting both async and callback signatures.
- * @param {Function} func - Use func(callback) for callbacks or async func() for promises.
+ * @param {Function} func - Use func(...args, callback) for callbacks or async func(...args) for promises.
+ * @param {...*} args - Arguments to pass to func ahead of any callback.
  * @returns {Promise<*>} Resolves with the value produced by func.
  */
-async function executeFunc(func) {
-    // If the function doesn't have any arguments, there wasn't a callback provided
-    if (func.length === 0) {
-        return func();
+async function executeFunc(func, ...args) {
+    // If the function doesn't declare a parameter beyond the provided arguments, there wasn't a callback provided
+    if (func.length <= args.length) {
+        return func(...args);
     }
 
-    // If the function has arguments, there was a callback provided
+    // If the function declares an additional parameter, there was a callback provided
     return new Promise((resolve, reject) => {
-        func((err, data) => {
+        func(...args, (err, data) => {
             if (err) {
                 return reject(err);
             }

@@ -87,14 +87,14 @@ pettyCache.bulkFetch(['a', 'b', 'c', 'd'], function(keys, callback) {
 
 ```javascript
 // Let's assume a and b are already cached as 1 and 2
-const values = await pettyCache.bulkFetch(['a', 'b', 'c', 'd'], function(keys, callback) {
+const values = await pettyCache.bulkFetch(['a', 'b', 'c', 'd'], async (keys) => {
     const results = {};
 
     keys.forEach(function(key) {
         results[key] = key.toUpperCase();
     });
 
-    callback(null, results);
+    return results;
 });
 
 console.log(values); // {a: 1, b: 2, c: 'C', d: 'D'}
