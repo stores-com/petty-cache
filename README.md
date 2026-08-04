@@ -64,9 +64,9 @@ const redisClient = redis.createClient();
 const pettyCache = new PettyCache(redisClient);
 ```
 
-### pettyCache.bulkFetch(keys, cacheMissFunction, [options,] callback)
+### pettyCache.bulkFetch(keys, cacheMissFunction, [options, [callback]])
 
-Attempts to retrieve the values of the keys specified in the `keys` array. Any keys that aren't found are passed to cacheMissFunction as an array along with a callback that takes an error and an object, expecting the keys of the object to be the keys passed to `cacheMissFunction` and the values to be the values that should be stored in cache for the corresponding key.  Either way, the resulting error or key-value hash of all requested keys is passed to `callback`.
+Attempts to retrieve the values of the keys specified in the `keys` array. Any keys that aren't found are passed to cacheMissFunction as an array along with a callback that takes an error and an object, expecting the keys of the object to be the keys passed to `cacheMissFunction` and the values to be the values that should be stored in cache for the corresponding key.  Either way, the resulting error or key-value hash of all requested keys is passed to `callback`. Supports both callbacks and promises.
 
 **Example**
 
@@ -83,6 +83,21 @@ pettyCache.bulkFetch(['a', 'b', 'c', 'd'], function(keys, callback) {
 }, function(err, values) {
     console.log(values); // {a: 1, b: 2, c: 'C', d: 'D'}
 });
+```
+
+```javascript
+// Let's assume a and b are already cached as 1 and 2
+const values = await pettyCache.bulkFetch(['a', 'b', 'c', 'd'], function(keys, callback) {
+    const results = {};
+
+    keys.forEach(function(key) {
+        results[key] = key.toUpperCase();
+    });
+
+    callback(null, results);
+});
+
+console.log(values); // {a: 1, b: 2, c: 'C', d: 'D'}
 ```
 
 **Options**
@@ -103,30 +118,38 @@ pettyCache.bulkFetch(['a', 'b', 'c', 'd'], function(keys, callback) {
 }
 ```
 
-### pettyCache.bulkGet(keys, callback)
+### pettyCache.bulkGet(keys, [callback])
 
-Attempts to retrieve the values of the keys specified in the `keys` array. Returns a key-value hash of all specified keys with either the corresponding values from cache or `undefined` if a key was not found.
+Attempts to retrieve the values of the keys specified in the `keys` array. Returns a key-value hash of all specified keys with either the corresponding values from cache or `null` if a key was not found. Supports both callbacks and promises.
 
 **Example**
 
 ```javascript
-pettyCache.get(['key1', 'key2', 'key3'], function(err, values) {
+pettyCache.bulkGet(['key1', 'key2', 'key3'], function(err, values) {
     console.log(values);
 });
 ```
 
-### pettyCache.bulkSet(values, [options,] callback)
+```javascript
+const values = await pettyCache.bulkGet(['key1', 'key2', 'key3']);
+```
 
-Unconditionally sets the values for the specified keys.
+### pettyCache.bulkSet(values, [options, [callback]])
+
+Unconditionally sets the values for the specified keys. Supports both callbacks and promises.
 
 **Example**
 
 ```javascript
-pettyCache.set({ key1: 'one', key2: 2, key3: 'three' }, function(err) {
+pettyCache.bulkSet({ key1: 'one', key2: 2, key3: 'three' }, function(err) {
     if (err) {
         // Handle error
     }
 });
+```
+
+```javascript
+await pettyCache.bulkSet({ key1: 'one', key2: 2, key3: 'three' });
 ```
 
 **Options**
@@ -216,9 +239,9 @@ const value = await pettyCache.fetch('key', async () => {
 }
 ```
 
-### pettyCache.fetchAndRefresh(key, cacheMissFunction, [options,] callback)
+### pettyCache.fetchAndRefresh(key, cacheMissFunction, [options, [callback]])
 
-Similar to `pettyCache.fetch` but this method continually refreshes the data in cache by executing the specified cacheMissFunction before the TTL expires. 
+Similar to `pettyCache.fetch` but this method continually refreshes the data in cache by executing the specified cacheMissFunction before the TTL expires. Note: the background refresh always calls `cacheMissFunction` with a callback, so it must accept a callback parameter (async functions without a callback parameter are not supported).
 
 **Example**
 
@@ -338,6 +361,22 @@ await pettyCache.set('key', { a: 'b' });
         max: 10000
     }
 }
+```
+
+### PettyCache.parse(text)
+
+Parses a JSON string produced by `PettyCache.stringify()`, restoring `NaN`, `null`, and `undefined` values. This is the deserializer petty-cache uses for values coming back from Redis.
+
+```javascript
+const value = PettyCache.parse('{"a":"__null"}'); // { a: null }
+```
+
+### PettyCache.stringify(value)
+
+Serializes a value to JSON, encoding `NaN`, `null`, and `undefined` as sentinel strings so they survive the round trip to Redis and back through `PettyCache.parse()`.
+
+```javascript
+const text = PettyCache.stringify({ a: null }); // '{"a":"__null"}'
 ```
 
 ## Mutex
@@ -493,7 +532,7 @@ pettyCache.semaphore.releaseLock('key', index, function(err) {
 
 ### pettyCache.semaphore.reset(key, [callback])
 
-Resets the semaphore to its initial state effectively releasing all locks (even those that have been marked as "consumed").
+Resets all locks in the semaphore's pool to available, releasing them all (even those that have been marked as "consumed"). The pool keeps its current size, including any expansions.
 
 ```javascript
 pettyCache.semaphore.reset('key', function(err) {
