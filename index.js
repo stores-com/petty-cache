@@ -363,12 +363,14 @@ function PettyCache() {
 
     /**
      * Returns data from cache if available; otherwise executes func, stores the result, and returns it.
-     * Uses double-checked locking to prevent cache stampedes. Supports async and callback func signatures.
+     * Uses double-checked locking to prevent cache stampedes. Supports async and callback func signatures,
+     * and both callback and promise styles.
      * @param {string} key - The cache key.
      * @param {Function} func - Called on cache miss. Use func(callback) for callbacks or async func() for promises.
      * @param {Object} [options] - Optional settings.
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
-     * @param {Function} [callback] - Optional callback(err, value). Defaults to a noop.
+     * @param {Function} [callback] - Optional callback(err, value). If omitted, returns a Promise.
+     * @returns {Promise|undefined} Resolves with the cached or newly fetched value.
      */
     this.fetch = (key, func, options = {}, callback) => {
         if (typeof options === 'function') {
@@ -376,107 +378,114 @@ function PettyCache() {
             options = {};
         }
 
-        // Default callback is a noop
-        callback = callback || (() => {});
-
-        // Try to get value from memory cache
-        let result = getFromMemoryCache(key);
-
-        // Return value from memory cache if it exists
-        if (result.exists) {
-            return callback(null, result.value);
-        }
-
         const _this = this;
 
-        // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-        lock(`fetch-memory-cache-lock-${key}`, (releaseMemoryCacheLock) => {
-            async.reflect((callback) => {
+        const executor = () => {
+            return new Promise((resolve, reject) => {
                 // Try to get value from memory cache
-                result = getFromMemoryCache(key);
+                let result = getFromMemoryCache(key);
 
                 // Return value from memory cache if it exists
                 if (result.exists) {
-                    return callback(null, result.value);
+                    return resolve(result.value);
                 }
 
-                // Try to get value from Redis
-                getFromRedis(key, (err, result) => {
-                    if (err) {
-                        return callback(err);
-                    }
+                // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
+                lock(`fetch-memory-cache-lock-${key}`, (releaseMemoryCacheLock) => {
+                    async.reflect((callback) => {
+                        // Try to get value from memory cache
+                        result = getFromMemoryCache(key);
 
-                    // Return value from Redis if it exists
-                    if (result.exists) {
-                        memoryCache.put(key, result.value, random(2000, 5000));
-                        return callback(null, result.value);
-                    }
+                        // Return value from memory cache if it exists
+                        if (result.exists) {
+                            return callback(null, result.value);
+                        }
 
-                    // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-                    lock(`fetch-redis-lock-${key}`, (releaseRedisLock) => {
-                        async.reflect((callback) => {
-                            // Try to get value from memory cache
-                            result = getFromMemoryCache(key);
+                        // Try to get value from Redis
+                        getFromRedis(key, (err, result) => {
+                            if (err) {
+                                return callback(err);
+                            }
 
-                            // Return value from memory cache if it exists
+                            // Return value from Redis if it exists
                             if (result.exists) {
+                                memoryCache.put(key, result.value, random(2000, 5000));
                                 return callback(null, result.value);
                             }
 
-                            // Try to get value from Redis
-                            getFromRedis(key, async (err, result) => {
-                                if (err) {
-                                    return callback(err);
-                                }
+                            // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
+                            lock(`fetch-redis-lock-${key}`, (releaseRedisLock) => {
+                                async.reflect((callback) => {
+                                    // Try to get value from memory cache
+                                    result = getFromMemoryCache(key);
 
-                                // Return value from Redis if it exists
-                                if (result.exists) {
-                                    memoryCache.put(key, result.value, random(2000, 5000));
-                                    return callback(null, result.value);
-                                }
-
-                                // Execute the specified function and place the results in cache before returning the data
-                                if (func.length === 0) {
-                                    // If the function doesn't have any arguments, there wasn't a callback provided
-                                    try {
-                                        const data = await func();
-
-                                        _this.set(key, data, options, (err) => {
-                                            callback(err, data);
-                                        });
-                                    } catch(err) {
-                                        callback(err);
+                                    // Return value from memory cache if it exists
+                                    if (result.exists) {
+                                        return callback(null, result.value);
                                     }
-                                } else {
-                                    // If the function has arguments, there was a callback provided
-                                    func((err, data) => {
+
+                                    // Try to get value from Redis
+                                    getFromRedis(key, async (err, result) => {
                                         if (err) {
                                             return callback(err);
                                         }
 
-                                        _this.set(key, data, options, (err) => {
-                                            callback(err, data);
-                                        });
+                                        // Return value from Redis if it exists
+                                        if (result.exists) {
+                                            memoryCache.put(key, result.value, random(2000, 5000));
+                                            return callback(null, result.value);
+                                        }
+
+                                        // Execute the specified function and place the results in cache before returning the data
+                                        if (func.length === 0) {
+                                            // If the function doesn't have any arguments, there wasn't a callback provided
+                                            try {
+                                                const data = await func();
+
+                                                _this.set(key, data, options, (err) => {
+                                                    callback(err, data);
+                                                });
+                                            } catch(err) {
+                                                callback(err);
+                                            }
+                                        } else {
+                                            // If the function has arguments, there was a callback provided
+                                            func((err, data) => {
+                                                if (err) {
+                                                    return callback(err);
+                                                }
+
+                                                _this.set(key, data, options, (err) => {
+                                                    callback(err, data);
+                                                });
+                                            });
+                                        }
                                     });
-                                }
+                                })(releaseRedisLock((err, result) => {
+                                    if (result.error) {
+                                        return callback(result.error);
+                                    }
+
+                                    callback(null, result.value);
+                                }));
                             });
-                        })(releaseRedisLock((err, result) => {
-                            if (result.error) {
-                                return callback(result.error);
-                            }
+                        });
+                    })(releaseMemoryCacheLock((err, result) => {
+                        if (result.error) {
+                            return reject(result.error);
+                        }
 
-                            callback(null, result.value);
-                        }));
-                    });
+                        resolve(result.value);
+                    }));
                 });
-            })(releaseMemoryCacheLock((err, result) => {
-                if (result.error) {
-                    return callback(result.error);
-                }
+            });
+        };
 
-                callback(null, result.value);
-            }));
-        });
+        if (callback) {
+            executor().then(result => callback(null, result)).catch(callback);
+        } else {
+            return executor();
+        }
     };
 
     /**

@@ -1082,6 +1082,60 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 });
             });
         });
+
+        t.test('PettyCache.fetch should return value (promises)', async () => {
+            const key = Math.random().toString();
+
+            const data = await pettyCache.fetch(key, (callback) => {
+                return callback(null, { foo: 'bar' });
+            });
+
+            assert.strictEqual(data.foo, 'bar');
+
+            const cached = await pettyCache.fetch(key, () => {
+                throw 'This function should not be called';
+            });
+
+            assert.strictEqual(cached.foo, 'bar');
+        });
+
+        t.test('PettyCache.fetch should reject if func returns error (promises)', async () => {
+            await assert.rejects(
+                pettyCache.fetch(Math.random().toString(), (callback) => {
+                    callback(new Error('PettyCache.fetch should reject if func returns error'));
+                }),
+                { message: 'PettyCache.fetch should reject if func returns error' }
+            );
+        });
+
+        t.test('PettyCache.fetch should support async func (promises)', async () => {
+            const key = Math.random().toString();
+
+            const data = await pettyCache.fetch(key, async () => {
+                return { foo: 'bar' };
+            });
+
+            assert.strictEqual(data.foo, 'bar');
+        });
+
+        t.test('PettyCache.fetch should reject if async func throws error (promises)', async () => {
+            await assert.rejects(
+                pettyCache.fetch(Math.random().toString(), async () => {
+                    throw new Error('PettyCache.fetch should reject if async func throws error');
+                }),
+                { message: 'PettyCache.fetch should reject if async func throws error' }
+            );
+        });
+
+        t.test('PettyCache.fetch should return value with options (promises)', async () => {
+            const key = Math.random().toString();
+
+            const data = await pettyCache.fetch(key, (callback) => {
+                return callback(null, 'value');
+            }, { ttl: 6000 });
+
+            assert.strictEqual(data, 'value');
+        });
     });
 
     t.test('PettyCache.fetchAndRefresh', { concurrency: true }, async (t) => {

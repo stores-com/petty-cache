@@ -165,9 +165,9 @@ pettyCache.del('key', function(err) {
 await pettyCache.del('key');
 ```
 
-### pettyCache.fetch(key, cacheMissFunction, [options,] callback)
+### pettyCache.fetch(key, cacheMissFunction, [options, [callback]])
 
-Attempts to retrieve the value from cache at the specified key. If it doesn't exist, it executes the specified cacheMissFunction that takes two parameters: an error and a value. `cacheMissFunction` should retrieve the expected value for the key from another source and pass it to the given callback. Either way, the resulting error or value is passed to `callback`.
+Attempts to retrieve the value from cache at the specified key. If it doesn't exist, it executes the specified cacheMissFunction that takes two parameters: an error and a value. `cacheMissFunction` should retrieve the expected value for the key from another source and pass it to the given callback. Either way, the resulting error or value is passed to `callback`. Supports both callbacks and promises.
 
 **Example**
 
@@ -188,6 +188,13 @@ pettyCache.fetch('key', async () => {
 }, function(err, value) {
     // This callback is called once petty-cache has loaded data from cache or executed the specified cache miss function
     console.log(value);
+});
+```
+
+```javascript
+const value = await pettyCache.fetch('key', async () => {
+    // This function is called on a cache miss
+    return await fs.readFile('file.txt');
 });
 ```
 
