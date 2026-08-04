@@ -798,17 +798,18 @@ function PettyCache() {
             };
 
             const executor = async () => {
-                for (let attempts = options.retry.times; ; attempts--) {
+                let attempts = options.retry.times;
+
+                while (attempts > 1) {
                     try {
                         return await attempt();
                     } catch (err) {
-                        if (attempts <= 1) {
-                            throw err;
-                        }
-
+                        attempts--;
                         await timers.setTimeout(options.retry.interval);
                     }
                 }
+
+                return attempt();
             };
 
             if (callback) {

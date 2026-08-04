@@ -2197,6 +2197,22 @@ test('petty-cache', { concurrency: true }, async (t) => {
             );
         });
 
+        t.test('PettyCache.semaphore.acquireLock should retry until a slot becomes available (promises)', async () => {
+            const key = Math.random().toString();
+
+            await pettyCache.semaphore.retrieveOrCreate(key, { size: 1 });
+
+            // Acquire the pool's only slot with a short TTL
+            const index = await pettyCache.semaphore.acquireLock(key, { ttl: 500 });
+
+            assert.strictEqual(index, 0);
+
+            // Retries until the first lock's TTL expires and its slot can be reclaimed
+            const retriedIndex = await pettyCache.semaphore.acquireLock(key, { retry: { interval: 200, times: 10 } });
+
+            assert.strictEqual(retriedIndex, 0);
+        });
+
         t.test('PettyCache.semaphore.expand should reject when shrinking (promises)', async () => {
             const key = Math.random().toString();
 
