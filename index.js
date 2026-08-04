@@ -6,6 +6,73 @@ const lock = require('lock').Lock();
 const memoryCache = require('memory-cache');
 const redis = require('redis');
 
+const deprecationWarnings = new Set();
+
+/**
+ * Acquires the in-process lock for the given key and resolves once it's held.
+ * @param {string} key
+ * @returns {Promise<Function>} Resolves with a function that releases the lock.
+ */
+function acquireLock(key) {
+    return new Promise(resolve => {
+        lock(key, release => resolve(release()));
+    });
+}
+
+/**
+ * Emits a once-per-process DeprecationWarning for callback-style usage.
+ * @param {string} name - The public method name shown in the warning.
+ * @param {string} [message] - Overrides the standard callback deprecation message.
+ */
+function deprecateCallback(name, message) {
+    if (deprecationWarnings.has(name)) {
+        return;
+    }
+
+    deprecationWarnings.add(name);
+    process.emitWarning(message || `${name}: callbacks are deprecated and will be removed in petty-cache v5. Omit the callback to receive a promise.`, 'DeprecationWarning');
+}
+
+/**
+ * Executes a cache-miss function, supporting both async and callback signatures.
+ * @param {Function} func - Use func(...args, callback) for callbacks or async func(...args) for promises.
+ * @param {...*} args - Arguments to pass to func ahead of any callback.
+ * @returns {Promise<*>} Resolves with the value produced by func.
+ */
+async function executeFunc(func, ...args) {
+    // If the function doesn't declare a parameter beyond the provided arguments, there wasn't a callback provided
+    if (func.length <= args.length) {
+        return func(...args);
+    }
+
+    // If the function declares an additional parameter, there was a callback provided
+    deprecateCallback('callback-style functions', 'Callback-style functions passed to petty-cache are deprecated and will be removed in petty-cache v5. Use an async function instead.');
+
+    return new Promise((resolve, reject) => {
+        func(...args, (err, data) => {
+            if (err) {
+                return reject(err);
+            }
+
+            resolve(data);
+        });
+    });
+}
+
+/**
+ * Returns a random integer between min and max, inclusive.
+ * @param {number} min
+ * @param {number} max
+ * @returns {number}
+ */
+function random(min, max) {
+    if (min === max) {
+        return min;
+    }
+
+    return Math.floor(Math.random() * (max - min + 1) + min);
+}
+
 /**
  * Creates a new PettyCache instance backed by Redis.
  * Accepts the same arguments as redis.createClient(), or an existing RedisClient instance.
@@ -1029,74 +1096,6 @@ function PettyCache() {
             return executor();
         }
     };
-
-}
-
-const deprecationWarnings = new Set();
-
-/**
- * Acquires the in-process lock for the given key and resolves once it's held.
- * @param {string} key
- * @returns {Promise<Function>} Resolves with a function that releases the lock.
- */
-function acquireLock(key) {
-    return new Promise(resolve => {
-        lock(key, release => resolve(release()));
-    });
-}
-
-/**
- * Emits a once-per-process DeprecationWarning for callback-style usage.
- * @param {string} name - The public method name shown in the warning.
- * @param {string} [message] - Overrides the standard callback deprecation message.
- */
-function deprecateCallback(name, message) {
-    if (deprecationWarnings.has(name)) {
-        return;
-    }
-
-    deprecationWarnings.add(name);
-    process.emitWarning(message || `${name}: callbacks are deprecated and will be removed in petty-cache v5. Omit the callback to receive a promise.`, 'DeprecationWarning');
-}
-
-/**
- * Executes a cache-miss function, supporting both async and callback signatures.
- * @param {Function} func - Use func(...args, callback) for callbacks or async func(...args) for promises.
- * @param {...*} args - Arguments to pass to func ahead of any callback.
- * @returns {Promise<*>} Resolves with the value produced by func.
- */
-async function executeFunc(func, ...args) {
-    // If the function doesn't declare a parameter beyond the provided arguments, there wasn't a callback provided
-    if (func.length <= args.length) {
-        return func(...args);
-    }
-
-    // If the function declares an additional parameter, there was a callback provided
-    deprecateCallback('callback-style functions', 'Callback-style functions passed to petty-cache are deprecated and will be removed in petty-cache v5. Use an async function instead.');
-
-    return new Promise((resolve, reject) => {
-        func(...args, (err, data) => {
-            if (err) {
-                return reject(err);
-            }
-
-            resolve(data);
-        });
-    });
-}
-
-/**
- * Returns a random integer between min and max, inclusive.
- * @param {number} min
- * @param {number} max
- * @returns {number}
- */
-function random(min, max) {
-    if (min === max) {
-        return min;
-    }
-
-    return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
 /**
