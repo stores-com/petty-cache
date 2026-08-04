@@ -24,30 +24,32 @@ function PettyCache() {
     /**
      * Fetches multiple keys from Redis.
      * @param {string[]} keys
-     * @param {Function} callback - callback(err, values) where values maps each key to {exists, value}.
+     * @returns {Promise<Object>} Resolves with an object mapping each key to {exists, value}.
      */
-    function bulkGetFromRedis(keys, callback) {
-        // Try to get values from Redis
-        redisClient.mget(keys, (err, data) => {
-            if (err) {
-                return callback(err);
-            }
-
-            const values = {};
-
-            for (let i = 0; i < keys.length; i++) {
-                const key = keys[i];
-                const value = data[i];
-
-                if (value === null) {
-                    values[key] = { exists: false };
-                    continue;
+    function bulkGetFromRedis(keys) {
+        return new Promise((resolve, reject) => {
+            // Try to get values from Redis
+            redisClient.mget(keys, (err, data) => {
+                if (err) {
+                    return reject(err);
                 }
 
-                values[key] = { exists: true, value: PettyCache.parse(value) };
-            }
+                const values = {};
 
-            callback(null, values);
+                for (let i = 0; i < keys.length; i++) {
+                    const key = keys[i];
+                    const value = data[i];
+
+                    if (value === null) {
+                        values[key] = { exists: false };
+                        continue;
+                    }
+
+                    values[key] = { exists: true, value: PettyCache.parse(value) };
+                }
+
+                resolve(values);
+            });
         });
     }
 
@@ -77,21 +79,23 @@ function PettyCache() {
     /**
      * Fetches a single key from Redis.
      * @param {string} key
-     * @param {Function} callback - callback(err, {exists, value}).
+     * @returns {Promise<{exists: boolean, value: *}>}
      */
-    function getFromRedis(key, callback) {
-        // Try to get value from Redis
-        redisClient.get(key, (err, data) => {
-            if (err) {
-                return callback(err);
-            }
+    function getFromRedis(key) {
+        return new Promise((resolve, reject) => {
+            // Try to get value from Redis
+            redisClient.get(key, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
 
-            // Return if the key wasn't found in Redis
-            if (data === null) {
-                return callback(null, { exists: false });
-            }
+                // Return if the key wasn't found in Redis
+                if (data === null) {
+                    return resolve({ exists: false });
+                }
 
-            callback(null, { exists: true, value: PettyCache.parse(data) });
+                resolve({ exists: true, value: PettyCache.parse(data) });
+            });
         });
     }
 
@@ -142,74 +146,68 @@ function PettyCache() {
             options = {};
         }
 
-        const executor = () => {
-            return new Promise((resolve, reject) => {
-                // If there aren't any keys, return
-                if (!keys.length) {
-                    return resolve({});
+        const executor = async () => {
+            // If there aren't any keys, return
+            if (!keys.length) {
+                return {};
+            }
+
+            const _keys = Array.from(new Set(keys));
+            const values = {};
+
+            // Try to get values from memory cache
+            for (let i = _keys.length - 1; i >= 0; i--) {
+                const key = _keys[i];
+                const result = getFromMemoryCache(key);
+
+                if (result.exists) {
+                    values[key] = result.value;
+                    _keys.splice(i, 1);
                 }
+            }
 
-                const _keys = Array.from(new Set(keys));
-                const values = {};
+            // If there aren't any keys left, return
+            if (!_keys.length) {
+                return values;
+            }
 
-                // Try to get values from memory cache
-                for (let i = _keys.length - 1; i >= 0; i--) {
-                    const key = _keys[i];
-                    const result = getFromMemoryCache(key);
+            // Try to get values from Redis
+            const results = await bulkGetFromRedis(_keys);
 
-                    if (result.exists) {
-                        values[key] = result.value;
-                        _keys.splice(i, 1);
-                    }
+            for (let i = _keys.length - 1; i >= 0; i--) {
+                const key = _keys[i];
+                const result = results[key];
+
+                if (result.exists) {
+                    _keys.splice(i, 1);
+                    values[key] = result.value;
+
+                    // Store value in memory cache with a short expiration
+                    memoryCache.put(key, result.value, random(2000, 5000));
                 }
+            }
 
-                // If there aren't any keys left, return
-                if (!_keys.length) {
-                    return resolve(values);
-                }
+            // If there aren't any keys left, return
+            if (!_keys.length) {
+                return values;
+            }
 
-                // Try to get values from Redis
-                bulkGetFromRedis(_keys, (err, results) => {
+            // Execute the specified function for remaining keys
+            const data = await new Promise((resolve, reject) => {
+                func(_keys, (err, data) => {
                     if (err) {
                         return reject(err);
                     }
 
-                    for (let i = _keys.length - 1; i >= 0; i--) {
-                        const key = _keys[i];
-                        const result = results[key];
-
-                        if (result.exists) {
-                            _keys.splice(i, 1);
-                            values[key] = result.value;
-
-                            // Store value in memory cache with a short expiration
-                            memoryCache.put(key, result.value, random(2000, 5000));
-                        }
-                    }
-
-                    // If there aren't any keys left, return
-                    if (!_keys.length) {
-                        return resolve(values);
-                    }
-
-                    // Execute the specified function for remaining keys
-                    func(_keys, (err, data) => {
-                        if (err) {
-                            return reject(err);
-                        }
-
-                        Object.keys(data).forEach(key => values[key] = data[key]);
-
-                        this.bulkSet(data, options, err => {
-                            if (err) {
-                                return reject(err);
-                            }
-
-                            resolve(values);
-                        });
-                    });
+                    resolve(data);
                 });
             });
+
+            Object.keys(data).forEach(key => values[key] = data[key]);
+
+            await this.bulkSet(data, options);
+
+            return values;
         };
 
         if (callback) {
@@ -226,56 +224,50 @@ function PettyCache() {
      * @returns {Promise|undefined} Resolves with an object mapping each key to its value, or null if not found.
      */
     this.bulkGet = (keys, callback) => {
-        const executor = () => {
-            return new Promise((resolve, reject) => {
-                // If there aren't any keys, return
-                if (!keys.length) {
-                    return resolve({});
+        const executor = async () => {
+            // If there aren't any keys, return
+            if (!keys.length) {
+                return {};
+            }
+
+            const _keys = Array.from(new Set(keys));
+            const values = {};
+
+            // Try to get values from memory cache
+            for (let i = _keys.length - 1; i >= 0; i--) {
+                const key = _keys[i];
+                const result = getFromMemoryCache(key);
+
+                if (result.exists) {
+                    values[key] = result.value;
+                    _keys.splice(i, 1);
+                }
+            }
+
+            // If there aren't any keys left, return
+            if (!_keys.length) {
+                return values;
+            }
+
+            // Try to get values from Redis
+            const results = await bulkGetFromRedis(_keys);
+
+            for (let i = 0; i < _keys.length; i++) {
+                const key = _keys[i];
+                const result = results[key];
+
+                if (!result.exists) {
+                    values[key] = null;
+                    continue;
                 }
 
-                const _keys = Array.from(new Set(keys));
-                const values = {};
+                values[key] = result.value;
 
-                // Try to get values from memory cache
-                for (let i = _keys.length - 1; i >= 0; i--) {
-                    const key = _keys[i];
-                    const result = getFromMemoryCache(key);
+                // Store value in memory cache with a short expiration
+                memoryCache.put(key, result.value, random(2000, 5000));
+            }
 
-                    if (result.exists) {
-                        values[key] = result.value;
-                        _keys.splice(i, 1);
-                    }
-                }
-
-                // If there aren't any keys left, return
-                if (!_keys.length) {
-                    return resolve(values);
-                }
-
-                // Try to get values from Redis
-                bulkGetFromRedis(_keys, (err, results) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    for (let i = 0; i < _keys.length; i++) {
-                        const key = _keys[i];
-                        const result = results[key];
-
-                        if (!result.exists) {
-                            values[key] = null;
-                            continue;
-                        }
-
-                        values[key] = result.value;
-
-                        // Store value in memory cache with a short expiration
-                        memoryCache.put(key, result.value, random(2000, 5000));
-                    }
-
-                    resolve(values);
-                });
-            });
+            return values;
         };
 
         if (callback) {
@@ -378,107 +370,85 @@ function PettyCache() {
             options = {};
         }
 
-        const _this = this;
+        const executor = async () => {
+            // Try to get value from memory cache
+            let result = getFromMemoryCache(key);
 
-        const executor = () => {
-            return new Promise((resolve, reject) => {
+            // Return value from memory cache if it exists
+            if (result.exists) {
+                return result.value;
+            }
+
+            // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
+            const releaseMemoryCacheLock = await acquireLock(`fetch-memory-cache-lock-${key}`);
+
+            try {
                 // Try to get value from memory cache
-                let result = getFromMemoryCache(key);
+                result = getFromMemoryCache(key);
 
                 // Return value from memory cache if it exists
                 if (result.exists) {
-                    return resolve(result.value);
+                    return result.value;
+                }
+
+                // Try to get value from Redis
+                result = await getFromRedis(key);
+
+                // Return value from Redis if it exists
+                if (result.exists) {
+                    memoryCache.put(key, result.value, random(2000, 5000));
+                    return result.value;
                 }
 
                 // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-                lock(`fetch-memory-cache-lock-${key}`, (releaseMemoryCacheLock) => {
-                    async.reflect((callback) => {
-                        // Try to get value from memory cache
-                        result = getFromMemoryCache(key);
+                const releaseRedisLock = await acquireLock(`fetch-redis-lock-${key}`);
 
-                        // Return value from memory cache if it exists
-                        if (result.exists) {
-                            return callback(null, result.value);
-                        }
+                try {
+                    // Try to get value from memory cache
+                    result = getFromMemoryCache(key);
 
-                        // Try to get value from Redis
-                        getFromRedis(key, (err, result) => {
-                            if (err) {
-                                return callback(err);
-                            }
+                    // Return value from memory cache if it exists
+                    if (result.exists) {
+                        return result.value;
+                    }
 
-                            // Return value from Redis if it exists
-                            if (result.exists) {
-                                memoryCache.put(key, result.value, random(2000, 5000));
-                                return callback(null, result.value);
-                            }
+                    // Try to get value from Redis
+                    result = await getFromRedis(key);
 
-                            // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-                            lock(`fetch-redis-lock-${key}`, (releaseRedisLock) => {
-                                async.reflect((callback) => {
-                                    // Try to get value from memory cache
-                                    result = getFromMemoryCache(key);
+                    // Return value from Redis if it exists
+                    if (result.exists) {
+                        memoryCache.put(key, result.value, random(2000, 5000));
+                        return result.value;
+                    }
 
-                                    // Return value from memory cache if it exists
-                                    if (result.exists) {
-                                        return callback(null, result.value);
-                                    }
+                    // Execute the specified function and place the results in cache before returning the data
+                    let data;
 
-                                    // Try to get value from Redis
-                                    getFromRedis(key, async (err, result) => {
-                                        if (err) {
-                                            return callback(err);
-                                        }
+                    if (func.length === 0) {
+                        // If the function doesn't have any arguments, there wasn't a callback provided
+                        data = await func();
+                    } else {
+                        // If the function has arguments, there was a callback provided
+                        data = await new Promise((resolve, reject) => {
+                            func((err, data) => {
+                                if (err) {
+                                    return reject(err);
+                                }
 
-                                        // Return value from Redis if it exists
-                                        if (result.exists) {
-                                            memoryCache.put(key, result.value, random(2000, 5000));
-                                            return callback(null, result.value);
-                                        }
-
-                                        // Execute the specified function and place the results in cache before returning the data
-                                        if (func.length === 0) {
-                                            // If the function doesn't have any arguments, there wasn't a callback provided
-                                            try {
-                                                const data = await func();
-
-                                                _this.set(key, data, options, (err) => {
-                                                    callback(err, data);
-                                                });
-                                            } catch(err) {
-                                                callback(err);
-                                            }
-                                        } else {
-                                            // If the function has arguments, there was a callback provided
-                                            func((err, data) => {
-                                                if (err) {
-                                                    return callback(err);
-                                                }
-
-                                                _this.set(key, data, options, (err) => {
-                                                    callback(err, data);
-                                                });
-                                            });
-                                        }
-                                    });
-                                })(releaseRedisLock((err, result) => {
-                                    if (result.error) {
-                                        return callback(result.error);
-                                    }
-
-                                    callback(null, result.value);
-                                }));
+                                resolve(data);
                             });
                         });
-                    })(releaseMemoryCacheLock((err, result) => {
-                        if (result.error) {
-                            return reject(result.error);
-                        }
+                    }
 
-                        resolve(result.value);
-                    }));
-                });
-            });
+                    await this.set(key, data, options);
+
+                    return data;
+                } finally {
+                    releaseRedisLock();
+                }
+            } finally {
+                releaseMemoryCacheLock();
+            }
         };
 
         if (callback) {
@@ -543,48 +513,42 @@ function PettyCache() {
      * @returns {Promise|undefined} Resolves with the cached value, or null if not found.
      */
     this.get = (key, callback) => {
-        const executor = () => {
-            return new Promise((resolve, reject) => {
+        const executor = async () => {
+            // Try to get value from memory cache
+            let result = getFromMemoryCache(key);
+
+            // Return value from memory cache if it exists
+            if (result.exists) {
+                return result.value;
+            }
+
+            // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
+            const releaseMemoryCacheLock = await acquireLock(`get-memory-cache-lock-${key}`);
+
+            try {
                 // Try to get value from memory cache
-                let result = getFromMemoryCache(key);
+                result = getFromMemoryCache(key);
 
                 // Return value from memory cache if it exists
                 if (result.exists) {
-                    return resolve(result.value);
+                    return result.value;
                 }
 
-                // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-                lock(`get-memory-cache-lock-${key}`, (releaseMemoryCacheLock) => {
-                    async.reflect((callback) => {
-                        // Try to get value from memory cache
-                        result = getFromMemoryCache(key);
+                // Try to get value from Redis
+                result = await getFromRedis(key);
 
-                        // Return value from memory cache if it exists
-                        if (result.exists) {
-                            return callback(null, result.value);
-                        }
+                // Return null if the key wasn't found in Redis
+                if (!result.exists) {
+                    return null;
+                }
 
-                        getFromRedis(key, (err, result) => {
-                            if (err) {
-                                return callback(err);
-                            }
+                // Store value in memory cache with a short expiration
+                memoryCache.put(key, result.value, random(2000, 5000));
 
-                            if (!result.exists) {
-                                return callback(null, null);
-                            }
-
-                            memoryCache.put(key, result.value, random(2000, 5000));
-                            callback(null, result.value);
-                        });
-                    })(releaseMemoryCacheLock((err, result) => {
-                        if (result.error) {
-                            return reject(result.error);
-                        }
-
-                        resolve(result.value);
-                    }));
-                });
-            });
+                return result.value;
+            } finally {
+                releaseMemoryCacheLock();
+            }
         };
 
         if (callback) {
@@ -1100,6 +1064,17 @@ function PettyCache() {
     for (const method in this.semaphore) {
         this.semaphore[method] = this.semaphore[method].bind(this);
     }
+}
+
+/**
+ * Acquires the in-process lock for the given key and resolves once it's held.
+ * @param {string} key
+ * @returns {Promise<Function>} Resolves with a function that releases the lock.
+ */
+function acquireLock(key) {
+    return new Promise(resolve => {
+        lock(key, release => resolve(release()));
+    });
 }
 
 /**

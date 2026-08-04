@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.8.0] - 2026-08-03
 ### Changed
 - Added the ability for the `pettyCache.fetch` function to support callbacks and promises.
+- Modernized the internals of `fetch`, `get`, `bulkGet`, and `bulkFetch` to async/await.
+### Fixed
+- A cache-miss function passed to `fetch` that throws synchronously no longer leaves the in-process locks for that key held forever.
 
 ## [3.7.0] - 2026-03-12
 ### Changed
