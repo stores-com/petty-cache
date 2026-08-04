@@ -11,6 +11,8 @@ Also includes mutex and semaphore distributed locking primitives.
 
 As of v4, every function supports both promises (async/await) and callbacks — omit the callback to receive a promise. Callback support is deprecated and will be removed in v5; callback-style usage emits a Node.js `DeprecationWarning`.
 
+**Upgrading from v3:** in v3, `fetch`, `fetchAndRefresh`, and the `semaphore` methods `consumeLock`, `expand`, `releaseLock`, `reset`, and `retrieveOrCreate` treated a missing callback as fire-and-forget and silently discarded errors. In v4 those same calls return a promise, and an error that was previously swallowed becomes an unhandled promise rejection — which terminates the process on Node.js 15 and later — unless the caller awaits the promise or attaches a `.catch()`. Audit callback-less calls to these methods before upgrading.
+
 ## Features
 
 **Two-level cache**
