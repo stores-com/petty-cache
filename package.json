@@ -6,8 +6,8 @@
     },
     "description": "A cache module for node.js that uses a two-level cache (in-memory cache for recently accessed data plus Redis for distributed caching) with some extra features to avoid cache stampedes and thundering herds.",
     "devDependencies": {
-        "@eslint/js": "~10.0.1",
-        "globals": "~17.6.0"
+        "@eslint/js": "*",
+        "globals": "*"
     },
     "homepage": "https://github.com/stores-com/petty-cache",
     "keywords": [
