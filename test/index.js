@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const childProcess = require('node:child_process');
 const timers = require('node:timers/promises');
 
 const memoryCache = require('memory-cache');
@@ -3538,6 +3539,74 @@ test('PettyCache.fetch should lock around Redis', (t, done) => {
         });
     });
 });
+// Runs the specified petty-cache invocation in a child process with a callback that throws on its
+// first invocation, then reports how many times the callback ran and how the throw surfaced. A
+// child process is required because both of those outcomes are process-wide.
+function runThrowingCallback(invocation, callback) {
+    const script = `
+        const PettyCache = require(${JSON.stringify(require.resolve('../index.js'))});
+
+        const pettyCache = new PettyCache();
+
+        const calls = [];
+        const key = Math.random().toString();
+
+        const report = (channel) => {
+            process.stdout.write(JSON.stringify({ calls: calls, channel: channel }), () => process.exit(0));
+        };
+
+        process.on('uncaughtException', () => report('uncaughtException'));
+        process.on('unhandledRejection', () => report('unhandledRejection'));
+
+        const handler = () => {
+            calls.push('invoked');
+
+            if (calls.length === 1) {
+                throw new Error('callback threw');
+            }
+        };
+
+        ${invocation};
+
+        setTimeout(() => report('none'), 1000);
+    `;
+
+    childProcess.execFile(process.execPath, ['-e', script], (err, stdout) => {
+        if (err) {
+            return callback(err);
+        }
+
+        callback(null, JSON.parse(stdout));
+    });
+}
+
+test('PettyCache should not invoke a callback again when the callback throws', { concurrency: true }, async (t) => {
+    const invocations = [
+        { invocation: 'pettyCache.del(key, handler)', name: 'pettyCache.del' },
+        { invocation: 'pettyCache.fetchAndRefresh(key, (callback) => callback(null, { foo: \'bar\' }), handler)', name: 'pettyCache.fetchAndRefresh' },
+        { invocation: 'pettyCache.get(key, handler)', name: 'pettyCache.get' },
+        { invocation: 'pettyCache.set(key, { foo: \'bar\' }, handler)', name: 'pettyCache.set' }
+    ];
+
+    for (const invocation of invocations) {
+        t.test(invocation.name, (t, done) => {
+            runThrowingCallback(invocation.invocation, (err, result) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(result.calls, ['invoked']);
+                done();
+            });
+        });
+    }
+});
+
+test('PettyCache should surface a throw from a callback as an uncaught exception', (t, done) => {
+    runThrowingCallback('pettyCache.set(key, { foo: \'bar\' }, handler)', (err, result) => {
+        assert.ifError(err);
+        assert.strictEqual(result.channel, 'uncaughtException');
+        done();
+    });
+});
+
 test('PettyCache should emit deprecation warnings for callback usage', (t, done) => {
     // Warnings are emitted asynchronously; by this point the suite has exercised every callback-style API
     setImmediate(() => {
