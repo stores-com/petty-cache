@@ -59,6 +59,17 @@ async function executeFunc(func, ...args) {
 }
 
 /**
+ * Invokes a callback with the outcome of the specified promise. The callback is invoked on the next
+ * tick, outside of the promise chain, so that it's invoked exactly once and a throw from within the
+ * callback surfaces as an uncaught exception instead of rejecting the chain.
+ * @param {Promise} promise - The promise to bridge to the callback.
+ * @param {Function} callback - The caller's callback(err, result).
+ */
+function invokeCallback(promise, callback) {
+    promise.then(result => process.nextTick(callback, null, result), err => process.nextTick(callback, err));
+}
+
+/**
  * Returns a random integer between min and max, inclusive.
  * @param {number} min
  * @param {number} max
@@ -269,7 +280,7 @@ function PettyCache() {
 
         if (callback) {
             deprecateCallback('pettyCache.bulkFetch');
-            executor().then(result => callback(null, result)).catch(callback);
+            invokeCallback(executor(), callback);
         } else {
             return executor();
         }
@@ -330,7 +341,7 @@ function PettyCache() {
 
         if (callback) {
             deprecateCallback('pettyCache.bulkGet');
-            executor().then(result => callback(null, result)).catch(callback);
+            invokeCallback(executor(), callback);
         } else {
             return executor();
         }
@@ -372,7 +383,7 @@ function PettyCache() {
 
         if (callback) {
             deprecateCallback('pettyCache.bulkSet');
-            executor().then(result => callback(null, result)).catch(callback);
+            invokeCallback(executor(), callback);
         } else {
             return executor();
         }
@@ -392,7 +403,7 @@ function PettyCache() {
 
         if (callback) {
             deprecateCallback('pettyCache.del');
-            executor().then(result => callback(null, result)).catch(callback);
+            invokeCallback(executor(), callback);
         } else {
             return executor();
         }
@@ -482,7 +493,7 @@ function PettyCache() {
 
         if (callback) {
             deprecateCallback('pettyCache.fetch');
-            executor().then(result => callback(null, result)).catch(callback);
+            invokeCallback(executor(), callback);
         } else {
             return executor();
         }
@@ -534,7 +545,7 @@ function PettyCache() {
 
         if (callback) {
             deprecateCallback('pettyCache.fetchAndRefresh');
-            promise.then(result => callback(null, result)).catch(callback);
+            invokeCallback(promise, callback);
         } else {
             return promise;
         }
@@ -587,7 +598,7 @@ function PettyCache() {
 
         if (callback) {
             deprecateCallback('pettyCache.get');
-            executor().then(result => callback(null, result)).catch(callback);
+            invokeCallback(executor(), callback);
         } else {
             return executor();
         }
@@ -646,7 +657,7 @@ function PettyCache() {
 
             if (callback) {
                 deprecateCallback('pettyCache.mutex.lock');
-                executor().then(result => callback(null, result)).catch(callback);
+                invokeCallback(executor(), callback);
             } else {
                 return executor();
             }
@@ -664,7 +675,7 @@ function PettyCache() {
 
             if (callback) {
                 deprecateCallback('pettyCache.mutex.unlock');
-                executor().then(result => callback(null, result)).catch(callback);
+                invokeCallback(executor(), callback);
             } else {
                 return executor();
             }
@@ -703,7 +714,7 @@ function PettyCache() {
 
         if (callback) {
             deprecateCallback('pettyCache.patch');
-            executor().then(result => callback(null, result)).catch(callback);
+            invokeCallback(executor(), callback);
         } else {
             return executor();
         }
@@ -788,7 +799,7 @@ function PettyCache() {
 
             if (callback) {
                 deprecateCallback('pettyCache.semaphore.acquireLock');
-                executor().then(result => callback(null, result)).catch(callback);
+                invokeCallback(executor(), callback);
             } else {
                 return executor();
             }
@@ -837,7 +848,7 @@ function PettyCache() {
 
             if (callback) {
                 deprecateCallback('pettyCache.semaphore.consumeLock');
-                executor().then(result => callback(null, result)).catch(callback);
+                invokeCallback(executor(), callback);
             } else {
                 return executor();
             }
@@ -884,7 +895,7 @@ function PettyCache() {
 
             if (callback) {
                 deprecateCallback('pettyCache.semaphore.expand');
-                executor().then(result => callback(null, result)).catch(callback);
+                invokeCallback(executor(), callback);
             } else {
                 return executor();
             }
@@ -928,7 +939,7 @@ function PettyCache() {
 
             if (callback) {
                 deprecateCallback('pettyCache.semaphore.releaseLock');
-                executor().then(result => callback(null, result)).catch(callback);
+                invokeCallback(executor(), callback);
             } else {
                 return executor();
             }
@@ -968,7 +979,7 @@ function PettyCache() {
 
             if (callback) {
                 deprecateCallback('pettyCache.semaphore.reset');
-                executor().then(result => callback(null, result)).catch(callback);
+                invokeCallback(executor(), callback);
             } else {
                 return executor();
             }
@@ -1023,7 +1034,7 @@ function PettyCache() {
 
             if (callback) {
                 deprecateCallback('pettyCache.semaphore.retrieveOrCreate');
-                executor().then(result => callback(null, result)).catch(callback);
+                invokeCallback(executor(), callback);
             } else {
                 return executor();
             }
@@ -1058,7 +1069,7 @@ function PettyCache() {
 
         if (callback) {
             deprecateCallback('pettyCache.set');
-            executor().then(result => callback(null, result)).catch(callback);
+            invokeCallback(executor(), callback);
         } else {
             return executor();
         }

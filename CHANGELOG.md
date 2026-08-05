@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- A callback that throws is no longer invoked a second time with its own error. Callbacks are now invoked on the next tick, outside of the promise chain, so a throw from within a callback surfaces as an uncaught exception instead of being swallowed. Affects every callback-style function.
 
 ## [4.0.0] - 2026-08-03
 ### Changed
