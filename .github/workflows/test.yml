@@ -9,6 +9,7 @@ jobs:
       NODE_VERSION: 24.11.0
       REDIS_VERSION: 6.0.14
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
     - name: Setup Node ${{ env.NODE_VERSION }}
