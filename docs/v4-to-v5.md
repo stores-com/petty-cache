@@ -104,7 +104,7 @@ Plain-return functions (`() => value`) also work anywhere an async function is a
 
 petty-cache now uses [node-redis](https://www.npmjs.com/package/redis) v6 and connects the client automatically.
 
-- **Positional constructor arguments keep working.** `new PettyCache(port, host, options)` is translated to node-redis options. No change needed for this form.
+- **Positional constructor arguments keep working.** `new PettyCache(port, host, options)` is translated to node-redis options. The port may be a number or a numeric string, so the usual `new PettyCache(process.env.redisPort, process.env.redisHost, { auth_pass: process.env.redisPassword })` needs no change.
 - **Common v3 options are translated.** `auth_pass`, `connect_timeout`, `db`, `enable_offline_queue`, `family`, `host`, `path`, `port`, `socket_initial_delay`, `socket_keepalive`, and `tls` are translated to their node-redis v6 equivalents, whether passed positionally or as an options object. Options already in the v6 shape pass through untouched.
 - **Options with no v6 equivalent throw.** `detect_buffers`, `prefix`, `rename_commands`, `retry_strategy`, `return_buffers`, and `string_numbers` throw a `TypeError` rather than being silently ignored. Reimplement those with node-redis v6 options (e.g. `retry_strategy` becomes `socket.reconnectStrategy`, which receives the retry count and returns a delay in milliseconds).
 - **Injected clients must be node-redis v6 clients.** `new PettyCache(redisClient)` requires a client created by `redis@6`'s `createClient()`. petty-cache connects it if it isn't already connected.

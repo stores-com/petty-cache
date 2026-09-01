@@ -27,6 +27,20 @@ function assertNoCallback(name, ...args) {
 }
 
 /**
+ * Determines whether a value is a port number. Numeric strings count: ports usually arrive
+ * from the environment (e.g. process.env.redisPort), which is always a string.
+ * @param {*} value
+ * @returns {boolean}
+ */
+function isPort(value) {
+    if (typeof value === 'number') {
+        return true;
+    }
+
+    return typeof value === 'string' && value.trim().length !== 0 && Number.isInteger(Number(value));
+}
+
+/**
  * Returns a random integer between min and max, inclusive.
  * @param {number} min
  * @param {number} max
@@ -133,11 +147,11 @@ function PettyCache() {
 
     if (arguments[0] instanceof redis.RedisClient) {
         redisClient = arguments[0];
-    } else if (typeof arguments[0] === 'number') {
+    } else if (isPort(arguments[0])) {
         // Translate the legacy (port, [host, [options]]) signature to node-redis options
         const options = translateLegacyOptions(arguments[2]);
 
-        options.socket = Object.assign({}, options.socket, { port: arguments[0] });
+        options.socket = Object.assign({}, options.socket, { port: Number(arguments[0]) });
 
         if (arguments[1] !== undefined) {
             options.socket.host = arguments[1];

@@ -88,6 +88,27 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.strictEqual(capturedOptions.socket.port, 6379);
         });
 
+        t.test('new PettyCache(port, host, options) should accept a numeric string port', () => {
+            const originalCreateClient = redis.createClient;
+            let capturedOptions;
+
+            redis.createClient = (options) => {
+                capturedOptions = options;
+                return originalCreateClient();
+            };
+
+            // process.env values are strings, which is how every caller passes the port
+            const newPettyCache = new PettyCache('6379', 'localhost', { auth_pass: 'secret', enable_offline_queue: false });
+
+            redis.createClient = originalCreateClient;
+
+            assert(newPettyCache);
+            assert.strictEqual(capturedOptions.password, 'secret');
+            assert.strictEqual(capturedOptions.disableOfflineQueue, true);
+            assert.strictEqual(capturedOptions.socket.host, 'localhost');
+            assert.strictEqual(capturedOptions.socket.port, 6379);
+        });
+
         t.test('new PettyCache(options) should translate legacy host, port, and tls options', () => {
             const originalCreateClient = redis.createClient;
             let capturedOptions;
