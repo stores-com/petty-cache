@@ -84,6 +84,22 @@ function random(min, max) {
 }
 
 /**
+ * Returns the delay before node_redis' next reconnect attempt, in milliseconds.
+ *
+ * Must always return a number. Returning anything else tells node_redis to stop retrying and
+ * close the client for good, after which every command throws for the life of the process.
+ * Backs off to a steady interval rather than growing without bound, so a cache that has been
+ * unreachable for hours still reconnects as soon as it comes back.
+ *
+ * @param {Object} options - Reconnect state supplied by node_redis.
+ * @param {number} options.attempt - Attempt number, starting at 1.
+ * @returns {number}
+ */
+function retryStrategy(options) {
+    return Math.min(options.attempt * 200, 5000);
+}
+
+/**
  * Creates a new PettyCache instance backed by Redis.
  * Accepts the same arguments as redis.createClient(), or an existing RedisClient instance.
  * @param {...*} args - Either a RedisClient instance, or arguments forwarded to redis.createClient().
@@ -95,7 +111,25 @@ function PettyCache() {
     if (arguments[0] instanceof redis.RedisClient) {
         redisClient = arguments[0];
     } else {
-        redisClient = redis.createClient(...arguments);
+        const args = Array.from(arguments);
+        const index = args.length - 1;
+        const hasOptions = args.length !== 0 && args[index] !== null && typeof args[index] === 'object';
+
+        // node_redis abandons a client permanently once its cumulative reconnect delay reaches
+        // connect_timeout (one hour by default): it calls end(), and every command after that
+        // throws "The connection is already closed." until the process restarts. A retry_strategy
+        // alone does not prevent it — connection_gone checks connect_timeout after consulting the
+        // strategy — so connect_timeout is also raised to the largest value Node's timers accept.
+        // Anything larger overflows to 1ms and kills the client on its first connect instead.
+        const options = Object.assign({ connect_timeout: 2147483647, retry_strategy: retryStrategy }, hasOptions ? args[index] : null);
+
+        if (hasOptions) {
+            args[index] = options;
+        } else {
+            args.push(options);
+        }
+
+        redisClient = redis.createClient(...args);
     }
 
     //eslint-disable-next-line no-console
