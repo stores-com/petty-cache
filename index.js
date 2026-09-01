@@ -84,16 +84,9 @@ function random(min, max) {
 }
 
 /**
- * Returns the delay before node_redis' next reconnect attempt, in milliseconds.
- *
- * Mirrors node-redis v5's default strategy — exponential backoff capped at two seconds, plus
- * jitter so that processes knocked offline by the same failover do not retry in lockstep. Its
- * attempt counter starts at 1 where v5's starts at 0, hence the offset.
- *
- * Must always return a number. Returning anything else tells node_redis to stop retrying and
- * close the client for good, after which every command throws for the life of the process — so
- * v5's own give-up branch is deliberately not carried over.
- *
+ * Returns the delay before node_redis' next reconnect attempt, in milliseconds. Mirrors
+ * node-redis v5's default: exponential backoff capped at two seconds, plus jitter so processes
+ * knocked offline by one failover do not retry in lockstep.
  * @param {Object} options - Reconnect state supplied by node_redis.
  * @param {number} options.attempt - Attempt number, starting at 1.
  * @returns {number}
@@ -114,25 +107,20 @@ function PettyCache() {
     if (arguments[0] instanceof redis.RedisClient) {
         redisClient = arguments[0];
     } else {
-        const args = Array.from(arguments);
-        const index = args.length - 1;
-        const hasOptions = args.length !== 0 && args[index] !== null && typeof args[index] === 'object';
+        redisClient = redis.createClient(...arguments);
 
-        // node_redis abandons a client permanently once its cumulative reconnect delay reaches
-        // connect_timeout (one hour by default): it calls end(), and every command after that
-        // throws "The connection is already closed." until the process restarts. A retry_strategy
-        // alone does not prevent it — connection_gone checks connect_timeout after consulting the
-        // strategy — so connect_timeout is also raised. 2147483647 is Node's TIMEOUT_MAX; larger
-        // values are truncated to it anyway and warn on every connect attempt.
-        const options = Object.assign({ connect_timeout: 2147483647, retry_strategy: retryStrategy }, hasOptions ? args[index] : null);
-
-        if (hasOptions) {
-            args[index] = options;
-        } else {
-            args.push(options);
+        // node_redis abandons a client for good once its cumulative reconnect delay reaches
+        // connect_timeout, after which every command throws "The connection is already closed."
+        // until the process restarts. A retry_strategy cannot prevent that on its own, because
+        // connection_gone checks the budget after consulting the strategy. Both are read live
+        // when a connection drops, so they can be raised here rather than through createClient.
+        if (redisClient.options.connect_timeout === undefined) {
+            redisClient.connect_timeout = Number.MAX_SAFE_INTEGER;
         }
 
-        redisClient = redis.createClient(...args);
+        if (redisClient.options.retry_strategy === undefined) {
+            redisClient.options.retry_strategy = retryStrategy;
+        }
     }
 
     //eslint-disable-next-line no-console

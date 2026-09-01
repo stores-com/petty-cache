@@ -100,46 +100,28 @@ test('petty-cache', { concurrency: true }, async (t) => {
 
         t.test('new PettyCache() never lets node_redis abandon the client', () => {
             const createClient = redis.createClient;
-            let options;
+            const clients = [];
 
             redis.createClient = function() {
-                options = arguments[arguments.length - 1];
-                return createClient.apply(redis, arguments);
+                const client = createClient.apply(redis, arguments);
+                clients.push(client);
+                return client;
             };
 
             try {
                 assert.ok(new PettyCache(6379, 'localhost'));
+                assert.ok(new PettyCache(6379, 'localhost', { connect_timeout: 1000 }));
             } finally {
                 redis.createClient = createClient;
             }
 
             // Returning anything but a number tells node_redis to close the client for good
-            assert.strictEqual(typeof options.retry_strategy({ attempt: 1 }), 'number');
-            assert.strictEqual(typeof options.retry_strategy({ attempt: 1000000 }), 'number');
+            assert.strictEqual(typeof clients[0].options.retry_strategy({ attempt: 1 }), 'number');
+            assert.strictEqual(typeof clients[0].options.retry_strategy({ attempt: 1000000 }), 'number');
+            assert.strictEqual(clients[0].connect_timeout, Number.MAX_SAFE_INTEGER);
 
-            // node_redis checks connect_timeout after consulting retry_strategy, so it has to be
-            // raised too. 2147483647 is the largest value Node's timers accept without overflowing.
-            assert.strictEqual(options.connect_timeout, 2147483647);
-        });
-
-        t.test('new PettyCache() lets callers override the reconnect options', () => {
-            const createClient = redis.createClient;
-            let options;
-
-            redis.createClient = function() {
-                options = arguments[arguments.length - 1];
-                return createClient.apply(redis, arguments);
-            };
-
-            try {
-                assert.ok(new PettyCache(6379, 'localhost', { connect_timeout: 1000, enable_offline_queue: false }));
-            } finally {
-                redis.createClient = createClient;
-            }
-
-            assert.strictEqual(options.connect_timeout, 1000);
-            assert.strictEqual(options.enable_offline_queue, false);
-            assert.strictEqual(typeof options.retry_strategy, 'function');
+            // A caller that sets connect_timeout keeps it
+            assert.strictEqual(clients[1].connect_timeout, 1000);
         });
     });
 
