@@ -14,6 +14,7 @@ jobs:
       NODE_VERSION: 24.11.0
       REDIS_VERSION: 6.0.14
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
     - name: Setup Node ${{ env.NODE_VERSION }}
@@ -56,8 +57,8 @@ jobs:
       name: Send Slack notification
       run: |
         # Set common variables
-        COMMIT_AUTHOR=$(git log -1 --format='%an' ${{ github.sha }} | sed "s/'/'\\\\''/g")
-        COMMIT_MSG=$(git log -1 --pretty=format:%s ${{ github.sha }} | sed "s/'/'\\\\''/g" | head -c 100)
+        COMMIT_AUTHOR=$(git log -1 --format='%an' ${{ github.sha }} | sed 's/\\/\\\\/g; s/"/\\"/g')
+        COMMIT_MSG=$(git log -1 --pretty=format:%s ${{ github.sha }} | head -c 100 | sed 's/\\/\\\\/g; s/"/\\"/g')
         COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
         GH_RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
