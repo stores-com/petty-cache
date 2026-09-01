@@ -147,11 +147,18 @@ function PettyCache() {
 
     if (arguments[0] instanceof redis.RedisClient) {
         redisClient = arguments[0];
-    } else if (isPort(arguments[0])) {
-        // Translate the legacy (port, [host, [options]]) signature to node-redis options
+    } else if (arguments.length > 1 || isPort(arguments[0])) {
+        // Translate the legacy (port, [host, [options]]) signature to node-redis options. Callers
+        // pass process.env.redisPort, which is routinely unset, so dispatching on the port alone
+        // would send an unset port down the options branch and silently discard the host and
+        // password that follow it. An unusable port falls back to node-redis' own default instead.
         const options = translateLegacyOptions(arguments[2]);
 
-        options.socket = Object.assign({}, options.socket, { port: Number(arguments[0]) });
+        options.socket = Object.assign({}, options.socket);
+
+        if (isPort(arguments[0])) {
+            options.socket.port = Number(arguments[0]);
+        }
 
         if (arguments[1] !== undefined) {
             options.socket.host = arguments[1];

@@ -109,6 +109,32 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.strictEqual(capturedOptions.socket.port, 6379);
         });
 
+        t.test('new PettyCache(port, host, options) should keep host and password when the port is unset', () => {
+            const originalCreateClient = redis.createClient;
+            let capturedOptions;
+
+            redis.createClient = (options) => {
+                capturedOptions = options;
+                return originalCreateClient();
+            };
+
+            // redisPort is not set in production, so process.env.redisPort is undefined. Dispatching
+            // on the port alone used to send this down the options branch and silently drop the
+            // host and password, leaving an unauthenticated client pointed at localhost.
+            const newPettyCache = new PettyCache(undefined, 'localhost', { auth_pass: 'secret', enable_offline_queue: false });
+            const emptyStringPort = new PettyCache('', 'localhost', { auth_pass: 'secret' });
+
+            redis.createClient = originalCreateClient;
+
+            assert(newPettyCache);
+            assert(emptyStringPort);
+            assert.strictEqual(capturedOptions.password, 'secret');
+            assert.strictEqual(capturedOptions.socket.host, 'localhost');
+
+            // No port was given, so node-redis applies its own default rather than petty-cache
+            assert.strictEqual(capturedOptions.socket.port, undefined);
+        });
+
         t.test('new PettyCache(options) should translate legacy host, port, and tls options', () => {
             const originalCreateClient = redis.createClient;
             let capturedOptions;
