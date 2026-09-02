@@ -4,8 +4,6 @@ const lock = require('lock').Lock();
 const memoryCache = require('memory-cache');
 const redis = require('redis');
 
-const LEGACY_OPTIONS = ['auth_pass', 'connect_timeout', 'db', 'detect_buffers', 'enable_offline_queue', 'family', 'host', 'no_ready_check', 'path', 'port', 'prefix', 'rename_commands', 'retry_strategy', 'return_buffers', 'socket_initial_delay', 'socket_keepalive', 'string_numbers', 'tls'];
-
 /**
  * Acquires the in-process lock for the given key and resolves once it's held.
  * @param {string} key
@@ -46,7 +44,7 @@ function random(min, max) {
 
 /**
  * Creates a new PettyCache instance backed by Redis.
- * @param {Object|Object} [options] - A node-redis v6 RedisClient, or options for redis.createClient().
+ * @param {RedisClient|Object} [options] - A node-redis v6 client, or options for redis.createClient().
  */
 function PettyCache(options) {
     const intervals = {};
@@ -55,16 +53,6 @@ function PettyCache(options) {
     if (options instanceof redis.RedisClient) {
         redisClient = options;
     } else {
-        if (arguments.length > 1 || typeof options === 'number' || typeof options === 'string') {
-            throw new TypeError('petty-cache takes a node-redis options object');
-        }
-
-        const legacy = options ? LEGACY_OPTIONS.filter(key => Object.hasOwn(options, key)) : [];
-
-        if (legacy.length) {
-            throw new TypeError(`petty-cache takes a node-redis options object; got ${legacy.join(', ')}`);
-        }
-
         redisClient = redis.createClient(options);
     }
 

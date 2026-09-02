@@ -118,15 +118,6 @@ const pettyCache = new PettyCache(process.env.redisPort, process.env.redisHost, 
 const pettyCache = new PettyCache({ disableOfflineQueue: true, password: process.env.redisPassword, socket: { host: process.env.redisHost, port: process.env.redisPort } });
 ```
 
-Both old forms throw a `TypeError` that names what to change:
-
-```
-TypeError: petty-cache takes a node-redis options object
-TypeError: petty-cache takes a node-redis options object; got auth_pass, host, port
-```
-
-Failing at construction is deliberate. node-redis v6 ignores options it does not recognise, so passing a v4 options object through would produce an unauthenticated client pointed at localhost:6379 — a cache that never hits, never errors, and looks healthy. Better to stop at startup.
-
 Option names that moved:
 
 | v3 | v6 |

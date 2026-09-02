@@ -14,7 +14,7 @@ See the [v4 to v5 migration guide](docs/v4-to-v5.md).
 - Callback support is removed. Every function returns a promise; passing a callback rejects with a `TypeError`.
 - Cache-miss functions and `retrieveOrCreate`'s `size` option must be async (or plain-return) functions; callback-style functions are no longer supported.
 - Upgraded the `redis` client from v3 to v6. The client is connected automatically, and injected clients must be node-redis v6 clients.
-- The constructor takes a node-redis v6 options object. The `(port, [host, [options]])` signature and node-redis v3 option names (`auth_pass`, `host`, `port`, `enable_offline_queue`, and friends) were removed; both now throw a `TypeError` naming what to change.
+- The constructor takes a node-redis v6 options object, passed to `redis.createClient()` untouched. The `(port, [host, [options]])` signature and node-redis v3 option names (`auth_pass`, `host`, `port`, `enable_offline_queue`, and friends) are no longer supported.
 ## [4.0.1] - 2026-08-05
 ### Fixed
 - A callback that throws is no longer invoked a second time with its own error. Callbacks are now invoked on the next tick, outside of the promise chain, so a throw from within a callback surfaces as an uncaught exception instead of being swallowed. Affects every callback-style function.

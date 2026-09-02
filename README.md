@@ -48,7 +48,7 @@ const value = await pettyCache.fetch('key', async () => {
 
 Creates a new petty-cache client backed by [node-redis](https://www.npmjs.com/package/redis) v6 and connects it automatically. `options` is passed to [redis.createClient()](https://www.npmjs.com/package/redis) untouched.
 
-The v4 `(port, host, options)` signature and node-redis v3 option names were removed in v5. Both throw a `TypeError` naming what to change rather than being translated, because a mistranslated option silently produces an unauthenticated client pointed at localhost.
+v4's `(port, host, options)` signature and node-redis v3 option names are not supported; see the [v4 to v5 migration guide](docs/v4-to-v5.md).
 
 **Example**
 ```javascript
