@@ -56,13 +56,13 @@ function PettyCache(options) {
         redisClient = options;
     } else {
         if (arguments.length > 1 || typeof options === 'number' || typeof options === 'string') {
-            throw new TypeError('petty-cache v5 takes a node-redis options object. The (port, host, options) signature was removed; see docs/v4-to-v5.md.');
+            throw new TypeError('petty-cache takes a node-redis options object');
         }
 
         const legacy = options ? LEGACY_OPTIONS.filter(key => Object.hasOwn(options, key)) : [];
 
         if (legacy.length) {
-            throw new TypeError(`petty-cache v5 takes a node-redis options object. ${legacy.join(', ')} ${legacy.length === 1 ? 'is a node-redis v3 option' : 'are node-redis v3 options'} and would be ignored; see docs/v4-to-v5.md.`);
+            throw new TypeError(`petty-cache takes a node-redis options object; got ${legacy.join(', ')}`);
         }
 
         redisClient = redis.createClient(options);
