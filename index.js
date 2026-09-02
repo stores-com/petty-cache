@@ -1,11 +1,8 @@
 const timers = require('node:timers/promises');
-const util = require('node:util');
 
 const lock = require('lock').Lock();
 const memoryCache = require('memory-cache');
 const redis = require('redis');
-
-const deprecationWarnings = new Set();
 
 /**
  * Acquires the in-process lock for the given key and resolves once it's held.
@@ -19,55 +16,16 @@ function acquireLock(key) {
 }
 
 /**
- * Emits a once-per-process DeprecationWarning for callback-style usage.
- * @param {string} name - The public method name shown in the warning.
- * @param {string} [message] - Overrides the standard callback deprecation message.
+ * Throws if any of the given arguments is a function, catching legacy callback-style calls.
+ * @param {string} name - The public method name shown in the error.
+ * @param {...*} args - Arguments beyond the method's supported signature.
  */
-function deprecateCallback(name, message) {
-    if (deprecationWarnings.has(name)) {
-        return;
+function assertNoCallback(name, ...args) {
+    if (args.some(arg => typeof arg === 'function')) {
+        throw new TypeError(`${name}: callbacks were removed in petty-cache v5. Use the returned promise instead.`);
     }
-
-    deprecationWarnings.add(name);
-    process.emitWarning(message || `${name}: callbacks are deprecated and will be removed in petty-cache v5. Omit the callback to receive a promise.`, 'DeprecationWarning');
 }
 
-/**
- * Executes a cache-miss function, supporting both async and callback signatures.
- * @param {Function} func - Use func(...args, callback) for callbacks or async func(...args) for promises.
- * @param {...*} args - Arguments to pass to func ahead of any callback.
- * @returns {Promise<*>} Resolves with the value produced by func.
- */
-async function executeFunc(func, ...args) {
-    // If the function doesn't declare a parameter beyond the provided arguments, there wasn't a callback provided
-    if (func.length <= args.length) {
-        return func(...args);
-    }
-
-    // If the function declares an additional parameter, there was a callback provided
-    deprecateCallback('callback-style functions', 'Callback-style functions passed to petty-cache are deprecated and will be removed in petty-cache v5. Use an async function instead.');
-
-    return new Promise((resolve, reject) => {
-        func(...args, (err, data) => {
-            if (err) {
-                return reject(err);
-            }
-
-            resolve(data);
-        });
-    });
-}
-
-/**
- * Invokes a callback with the outcome of the specified promise. The callback is invoked on the next
- * tick, outside of the promise chain, so that it's invoked exactly once and a throw from within the
- * callback surfaces as an uncaught exception instead of rejecting the chain.
- * @param {Promise} promise - The promise to bridge to the callback.
- * @param {Function} callback - The caller's callback(err, result).
- */
-function invokeCallback(promise, callback) {
-    promise.then(result => process.nextTick(callback, null, result), err => process.nextTick(callback, err));
-}
 
 /**
  * Returns a random integer between min and max, inclusive.
@@ -83,31 +41,29 @@ function random(min, max) {
     return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
+
 /**
  * Creates a new PettyCache instance backed by Redis.
- * Accepts the same arguments as redis.createClient(), or an existing RedisClient instance.
- * @param {...*} args - Either a RedisClient instance, or arguments forwarded to redis.createClient().
+ * @param {RedisClient|Object} [options] - A node-redis v6 client, or options for redis.createClient().
  */
-function PettyCache() {
+function PettyCache(options) {
     const intervals = {};
     let redisClient;
 
-    if (arguments[0] instanceof redis.RedisClient) {
-        redisClient = arguments[0];
+    if (options instanceof redis.RedisClient) {
+        redisClient = options;
     } else {
-        redisClient = redis.createClient(...arguments);
+        redisClient = redis.createClient(options);
     }
 
     //eslint-disable-next-line no-console
     redisClient.on('error', err => console.warn(`Warning: Redis reported a client error: ${err}`));
 
-    // Promisify per call rather than once at construction so that wrappers applied to the
-    // client's methods later (APM instrumentation, test stubs) are respected
-    const delAsync = (...args) => util.promisify(redisClient.del).apply(redisClient, args);
-    const getAsync = (...args) => util.promisify(redisClient.get).apply(redisClient, args);
-    const mgetAsync = (...args) => util.promisify(redisClient.mget).apply(redisClient, args);
-    const psetexAsync = (...args) => util.promisify(redisClient.psetex).apply(redisClient, args);
-    const setAsync = (...args) => util.promisify(redisClient.set).apply(redisClient, args);
+    // Connect automatically; commands issued while the client is connecting are queued.
+    // Connection errors surface through the error event above and as rejected commands.
+    if (!redisClient.isOpen) {
+        redisClient.connect().catch(() => {});
+    }
 
     /**
      * Fetches multiple keys from Redis.
@@ -116,7 +72,7 @@ function PettyCache() {
      */
     async function bulkGetFromRedis(keys) {
         // Try to get values from Redis
-        const data = await mgetAsync(keys);
+        const data = await redisClient.mGet(keys);
 
         const values = {};
 
@@ -165,7 +121,7 @@ function PettyCache() {
      */
     async function getFromRedis(key) {
         // Try to get value from Redis
-        const data = await getAsync(key);
+        const data = await redisClient.get(key);
 
         // Return if the key wasn't found in Redis
         if (data === null) {
@@ -208,235 +164,222 @@ function PettyCache() {
 
     /**
      * Returns data from cache for each key if available; otherwise executes func for the missing keys
-     * and stores the results in cache before returning. Supports both callback and promise styles.
+     * and stores the results in cache before returning.
      * @param {Array} keys - An array of cache keys.
-     * @param {Function} func - Called with the missing keys. Use func(keys, callback) for callbacks or async func(keys) for promises.
+     * @param {Function} func - Called with the missing keys: async func(keys).
      * @param {Object} [options] - Optional settings.
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
-     * @param {Function} [callback] - Optional callback(err, values). If omitted, returns a Promise.
-     * @returns {Promise|undefined} Resolves with an object mapping each key to its cached value.
+     * @returns {Promise<Object>} Resolves with an object mapping each key to its cached value.
      */
-    this.bulkFetch = (keys, func, options = {}, callback) => {
-        if (typeof options === 'function') {
-            callback = options;
-            options = {};
+    this.bulkFetch = async (keys, func, options = {}, ...rest) => {
+        assertNoCallback('pettyCache.bulkFetch', options, ...rest);
+
+        // If there aren't any keys, return
+        if (!keys.length) {
+            return {};
         }
 
-        const executor = async () => {
-            // If there aren't any keys, return
-            if (!keys.length) {
-                return {};
+        const _keys = Array.from(new Set(keys));
+        const values = {};
+
+        // Try to get values from memory cache
+        for (let i = _keys.length - 1; i >= 0; i--) {
+            const key = _keys[i];
+            const result = getFromMemoryCache(key);
+
+            if (result.exists) {
+                values[key] = result.value;
+                _keys.splice(i, 1);
             }
+        }
 
-            const _keys = Array.from(new Set(keys));
-            const values = {};
-
-            // Try to get values from memory cache
-            for (let i = _keys.length - 1; i >= 0; i--) {
-                const key = _keys[i];
-                const result = getFromMemoryCache(key);
-
-                if (result.exists) {
-                    values[key] = result.value;
-                    _keys.splice(i, 1);
-                }
-            }
-
-            // If there aren't any keys left, return
-            if (!_keys.length) {
-                return values;
-            }
-
-            // Try to get values from Redis
-            const results = await bulkGetFromRedis(_keys);
-
-            for (let i = _keys.length - 1; i >= 0; i--) {
-                const key = _keys[i];
-                const result = results[key];
-
-                if (result.exists) {
-                    _keys.splice(i, 1);
-                    values[key] = result.value;
-
-                    // Store value in memory cache with a short expiration
-                    memoryCache.put(key, result.value, random(2000, 5000));
-                }
-            }
-
-            // If there aren't any keys left, return
-            if (!_keys.length) {
-                return values;
-            }
-
-            // Execute the specified function for remaining keys
-            const data = await executeFunc(func, _keys);
-
-            Object.keys(data).forEach(key => values[key] = data[key]);
-
-            await this.bulkSet(data, options);
-
+        // If there aren't any keys left, return
+        if (!_keys.length) {
             return values;
-        };
-
-        if (callback) {
-            deprecateCallback('pettyCache.bulkFetch');
-            invokeCallback(executor(), callback);
-        } else {
-            return executor();
         }
-    };
 
-    /**
-     * Gets cached values for an array of keys. Supports both callback and promise styles.
-     * @param {Array} keys - An array of cache keys.
-     * @param {Function} [callback] - Optional callback(err, values). If omitted, returns a Promise.
-     * @returns {Promise|undefined} Resolves with an object mapping each key to its value, or null if not found.
-     */
-    this.bulkGet = (keys, callback) => {
-        const executor = async () => {
-            // If there aren't any keys, return
-            if (!keys.length) {
-                return {};
-            }
+        // Try to get values from Redis
+        const results = await bulkGetFromRedis(_keys);
 
-            const _keys = Array.from(new Set(keys));
-            const values = {};
+        for (let i = _keys.length - 1; i >= 0; i--) {
+            const key = _keys[i];
+            const result = results[key];
 
-            // Try to get values from memory cache
-            for (let i = _keys.length - 1; i >= 0; i--) {
-                const key = _keys[i];
-                const result = getFromMemoryCache(key);
-
-                if (result.exists) {
-                    values[key] = result.value;
-                    _keys.splice(i, 1);
-                }
-            }
-
-            // If there aren't any keys left, return
-            if (!_keys.length) {
-                return values;
-            }
-
-            // Try to get values from Redis
-            const results = await bulkGetFromRedis(_keys);
-
-            for (let i = 0; i < _keys.length; i++) {
-                const key = _keys[i];
-                const result = results[key];
-
-                if (!result.exists) {
-                    values[key] = null;
-                    continue;
-                }
-
+            if (result.exists) {
+                _keys.splice(i, 1);
                 values[key] = result.value;
 
                 // Store value in memory cache with a short expiration
                 memoryCache.put(key, result.value, random(2000, 5000));
             }
-
-            return values;
-        };
-
-        if (callback) {
-            deprecateCallback('pettyCache.bulkGet');
-            invokeCallback(executor(), callback);
-        } else {
-            return executor();
         }
+
+        // If there aren't any keys left, return
+        if (!_keys.length) {
+            return values;
+        }
+
+        // Execute the specified function for remaining keys
+        const data = await func(_keys);
+
+        Object.keys(data).forEach(key => values[key] = data[key]);
+
+        await this.bulkSet(data, options);
+
+        return values;
     };
 
     /**
-     * Sets multiple key/value pairs in cache simultaneously. Supports both callback and promise styles.
+     * Gets cached values for an array of keys.
+     * @param {Array} keys - An array of cache keys.
+     * @returns {Promise<Object>} Resolves with an object mapping each key to its value, or null if not found.
+     */
+    this.bulkGet = async (keys, ...rest) => {
+        assertNoCallback('pettyCache.bulkGet', ...rest);
+
+        // If there aren't any keys, return
+        if (!keys.length) {
+            return {};
+        }
+
+        const _keys = Array.from(new Set(keys));
+        const values = {};
+
+        // Try to get values from memory cache
+        for (let i = _keys.length - 1; i >= 0; i--) {
+            const key = _keys[i];
+            const result = getFromMemoryCache(key);
+
+            if (result.exists) {
+                values[key] = result.value;
+                _keys.splice(i, 1);
+            }
+        }
+
+        // If there aren't any keys left, return
+        if (!_keys.length) {
+            return values;
+        }
+
+        // Try to get values from Redis
+        const results = await bulkGetFromRedis(_keys);
+
+        for (let i = 0; i < _keys.length; i++) {
+            const key = _keys[i];
+            const result = results[key];
+
+            if (!result.exists) {
+                values[key] = null;
+                continue;
+            }
+
+            values[key] = result.value;
+
+            // Store value in memory cache with a short expiration
+            memoryCache.put(key, result.value, random(2000, 5000));
+        }
+
+        return values;
+    };
+
+    /**
+     * Sets multiple key/value pairs in cache simultaneously.
      * @param {Object} values - An object mapping cache keys to their values.
      * @param {Object} [options] - Optional settings.
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
-     * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
-     * @returns {Promise|undefined}
+     * @returns {Promise}
      */
-    this.bulkSet = (values, options = {}, callback) => {
-        if (typeof options === 'function') {
-            callback = options;
-            options = {};
-        }
+    this.bulkSet = async (values, options = {}, ...rest) => {
+        assertNoCallback('pettyCache.bulkSet', options, ...rest);
 
-        const executor = async () => {
-            // Get TTL based on specified options
-            const ttl = getTtl(options);
+        // Get TTL based on specified options
+        const ttl = getTtl(options);
 
-            // Redis does not have a MSETEX command so we batch commands: http://redis.js.org/#api-clientbatchcommands
-            const batch = redisClient.batch();
+        // Redis does not have an MSETEX command; individual PSETEX commands issued in the
+        // same tick are automatically pipelined into a single round trip by node-redis
+        await Promise.all(Object.keys(values).map(key => {
+            const value = values[key];
 
-            Object.keys(values).forEach(key => {
-                const value = values[key];
+            // Store value in memory cache with a short expiration
+            memoryCache.put(key, value, random(2000, 5000));
 
-                // Store value in memory cache with a short expiration
-                memoryCache.put(key, value, random(2000, 5000));
+            return redisClient.pSetEx(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
+        }));
+    };
 
-                // Add Redis command
-                batch.psetex(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
-            });
+    /**
+     * Stops the background refresh intervals started by fetchAndRefresh and gracefully
+     * closes the Redis client connection.
+     * @returns {Promise}
+     */
+    this.close = async (...rest) => {
+        assertNoCallback('pettyCache.close', ...rest);
 
-            await util.promisify(batch.exec).call(batch);
-        };
+        Object.keys(intervals).forEach(key => {
+            clearInterval(intervals[key]);
+            delete intervals[key];
+        });
 
-        if (callback) {
-            deprecateCallback('pettyCache.bulkSet');
-            invokeCallback(executor(), callback);
-        } else {
-            return executor();
+        if (redisClient.isOpen) {
+            await redisClient.close();
         }
     };
 
     /**
-     * Deletes a key from both the memory cache and Redis. Supports both callback and promise styles.
+     * Deletes a key from both the memory cache and Redis.
      * @param {string} key - The cache key to delete.
-     * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
-     * @returns {Promise|undefined}
+     * @returns {Promise}
      */
-    this.del = (key, callback) => {
-        const executor = async () => {
-            await delAsync(key);
-            memoryCache.del(key);
-        };
+    this.del = async (key, ...rest) => {
+        assertNoCallback('pettyCache.del', ...rest);
 
-        if (callback) {
-            deprecateCallback('pettyCache.del');
-            invokeCallback(executor(), callback);
-        } else {
-            return executor();
-        }
+        await redisClient.del(key);
+        memoryCache.del(key);
     };
 
     /**
      * Returns data from cache if available; otherwise executes func, stores the result, and returns it.
-     * Uses double-checked locking to prevent cache stampedes. Supports async and callback func signatures,
-     * and both callback and promise styles.
+     * Uses double-checked locking to prevent cache stampedes.
      * @param {string} key - The cache key.
-     * @param {Function} func - Called on cache miss. Use func(callback) for callbacks or async func() for promises.
+     * @param {Function} func - Called on cache miss: async func().
      * @param {Object} [options] - Optional settings.
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
-     * @param {Function} [callback] - Optional callback(err, value). If omitted, returns a Promise.
-     * @returns {Promise|undefined} Resolves with the cached or newly fetched value.
+     * @returns {Promise<*>} Resolves with the cached or newly fetched value.
      */
-    this.fetch = (key, func, options = {}, callback) => {
-        if (typeof options === 'function') {
-            callback = options;
-            options = {};
+    this.fetch = async (key, func, options = {}, ...rest) => {
+        assertNoCallback('pettyCache.fetch', options, ...rest);
+
+        // Try to get value from memory cache
+        let result = getFromMemoryCache(key);
+
+        // Return value from memory cache if it exists
+        if (result.exists) {
+            return result.value;
         }
 
-        const executor = async () => {
+        // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
+        const releaseMemoryCacheLock = await acquireLock(`fetch-memory-cache-lock-${key}`);
+
+        try {
             // Try to get value from memory cache
-            let result = getFromMemoryCache(key);
+            result = getFromMemoryCache(key);
 
             // Return value from memory cache if it exists
             if (result.exists) {
                 return result.value;
             }
 
+            // Try to get value from Redis
+            result = await getFromRedis(key);
+
+            // Return value from Redis if it exists
+            if (result.exists) {
+                memoryCache.put(key, result.value, random(2000, 5000));
+                return result.value;
+            }
+
             // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-            const releaseMemoryCacheLock = await acquireLock(`fetch-memory-cache-lock-${key}`);
+            const releaseRedisLock = await acquireLock(`fetch-redis-lock-${key}`);
 
             try {
                 // Try to get value from memory cache
@@ -456,65 +399,31 @@ function PettyCache() {
                     return result.value;
                 }
 
-                // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-                const releaseRedisLock = await acquireLock(`fetch-redis-lock-${key}`);
+                // Execute the specified function and place the results in cache before returning the data
+                const data = await func();
 
-                try {
-                    // Try to get value from memory cache
-                    result = getFromMemoryCache(key);
+                await this.set(key, data, options);
 
-                    // Return value from memory cache if it exists
-                    if (result.exists) {
-                        return result.value;
-                    }
-
-                    // Try to get value from Redis
-                    result = await getFromRedis(key);
-
-                    // Return value from Redis if it exists
-                    if (result.exists) {
-                        memoryCache.put(key, result.value, random(2000, 5000));
-                        return result.value;
-                    }
-
-                    // Execute the specified function and place the results in cache before returning the data
-                    const data = await executeFunc(func);
-
-                    await this.set(key, data, options);
-
-                    return data;
-                } finally {
-                    releaseRedisLock();
-                }
+                return data;
             } finally {
-                releaseMemoryCacheLock();
+                releaseRedisLock();
             }
-        };
-
-        if (callback) {
-            deprecateCallback('pettyCache.fetch');
-            invokeCallback(executor(), callback);
-        } else {
-            return executor();
+        } finally {
+            releaseMemoryCacheLock();
         }
     };
 
     /**
      * Like fetch(), but also sets up a background interval to proactively refresh the cached value
-     * before it expires, preventing cache misses under sustained load. Supports async and callback
-     * func signatures, and both callback and promise styles.
+     * before it expires, preventing cache misses under sustained load.
      * @param {string} key - The cache key.
-     * @param {Function} func - Called on cache miss and on each refresh interval. Use func(callback) for callbacks or async func() for promises.
+     * @param {Function} func - Called on cache miss and on each refresh interval: async func().
      * @param {Object} [options] - Optional settings.
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
-     * @param {Function} [callback] - Optional callback(err, value). If omitted, returns a Promise.
-     * @returns {Promise|undefined} Resolves with the cached or newly fetched value.
+     * @returns {Promise<*>} Resolves with the cached or newly fetched value.
      */
-    this.fetchAndRefresh = (key, func, options = {}, callback) => {
-        if (typeof options === 'function') {
-            callback = options;
-            options = {};
-        }
+    this.fetchAndRefresh = async (key, func, options = {}, ...rest) => {
+        assertNoCallback('pettyCache.fetchAndRefresh', options, ...rest);
 
         // Get TTL based on specified options
         const ttl = getTtl(options);
@@ -532,7 +441,7 @@ function PettyCache() {
 
                 // Execute the specified function and update cache, trying again next interval on failure
                 try {
-                    const data = await executeFunc(func);
+                    const data = await func();
 
                     await this.set(key, data, options);
                 } catch (err) {
@@ -541,87 +450,67 @@ function PettyCache() {
             }, delay);
         }
 
-        const promise = this.fetch(key, func, options);
-
-        if (callback) {
-            deprecateCallback('pettyCache.fetchAndRefresh');
-            invokeCallback(promise, callback);
-        } else {
-            return promise;
-        }
+        return this.fetch(key, func, options);
     };
 
     /**
-     * Gets a cached value. Supports both callback and promise styles.
+     * Gets a cached value.
      * @param {string} key - The cache key.
-     * @param {Function} [callback] - Optional callback(err, value). If omitted, returns a Promise.
-     * @returns {Promise|undefined} Resolves with the cached value, or null if not found.
+     * @returns {Promise<*>} Resolves with the cached value, or null if not found.
      */
-    this.get = (key, callback) => {
-        const executor = async () => {
+    this.get = async (key, ...rest) => {
+        assertNoCallback('pettyCache.get', ...rest);
+
+        // Try to get value from memory cache
+        let result = getFromMemoryCache(key);
+
+        // Return value from memory cache if it exists
+        if (result.exists) {
+            return result.value;
+        }
+
+        // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
+        const releaseMemoryCacheLock = await acquireLock(`get-memory-cache-lock-${key}`);
+
+        try {
             // Try to get value from memory cache
-            let result = getFromMemoryCache(key);
+            result = getFromMemoryCache(key);
 
             // Return value from memory cache if it exists
             if (result.exists) {
                 return result.value;
             }
 
-            // Double-checked locking: http://en.wikipedia.org/wiki/Double-checked_locking
-            const releaseMemoryCacheLock = await acquireLock(`get-memory-cache-lock-${key}`);
+            // Try to get value from Redis
+            result = await getFromRedis(key);
 
-            try {
-                // Try to get value from memory cache
-                result = getFromMemoryCache(key);
-
-                // Return value from memory cache if it exists
-                if (result.exists) {
-                    return result.value;
-                }
-
-                // Try to get value from Redis
-                result = await getFromRedis(key);
-
-                // Return null if the key wasn't found in Redis
-                if (!result.exists) {
-                    return null;
-                }
-
-                // Store value in memory cache with a short expiration
-                memoryCache.put(key, result.value, random(2000, 5000));
-
-                return result.value;
-            } finally {
-                releaseMemoryCacheLock();
+            // Return null if the key wasn't found in Redis
+            if (!result.exists) {
+                return null;
             }
-        };
 
-        if (callback) {
-            deprecateCallback('pettyCache.get');
-            invokeCallback(executor(), callback);
-        } else {
-            return executor();
+            // Store value in memory cache with a short expiration
+            memoryCache.put(key, result.value, random(2000, 5000));
+
+            return result.value;
+        } finally {
+            releaseMemoryCacheLock();
         }
     };
 
     this.mutex = {
         /**
-         * Acquires a distributed mutex lock in Redis. Supports both callback and promise styles.
+         * Acquires a distributed mutex lock in Redis.
          * @param {string} key - The lock key.
          * @param {Object} [options] - Optional settings.
          * @param {number} [options.ttl=1000] - Lock TTL in ms.
          * @param {Object} [options.retry] - Retry options.
          * @param {number} [options.retry.times=1] - Number of acquisition attempts.
          * @param {number} [options.retry.interval=100] - Delay between retries in ms.
-         * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
-         * @returns {Promise|undefined}
+         * @returns {Promise}
          */
-        lock: (key, options = {}, callback) => {
-            // Options are optional
-            if (!callback && typeof options === 'function') {
-                callback = options;
-                options = {};
-            }
+        lock: async (key, options = {}, ...rest) => {
+            assertNoCallback('pettyCache.mutex.lock', options, ...rest);
 
             options.retry = Object.hasOwn(options, 'retry') ? options.retry : {};
             options.retry.interval = Object.hasOwn(options.retry, 'interval') ? options.retry.interval : 100;
@@ -629,7 +518,7 @@ function PettyCache() {
             options.ttl = Object.hasOwn(options, 'ttl') ? options.ttl : 1000;
 
             const attempt = async () => {
-                const res = await setAsync(key, '1', 'NX', 'PX', options.ttl);
+                const res = await redisClient.set(key, '1', { NX: true, PX: options.ttl });
 
                 if (!res) {
                     throw new Error();
@@ -640,105 +529,68 @@ function PettyCache() {
                 }
             };
 
-            const executor = async () => {
-                let attempts = options.retry.times;
+            let attempts = options.retry.times;
 
-                while (attempts > 1) {
-                    try {
-                        return await attempt();
-                    } catch (err) {
-                        attempts--;
-                        await timers.setTimeout(options.retry.interval);
-                    }
+            while (attempts > 1) {
+                try {
+                    return await attempt();
+                } catch (err) {
+                    attempts--;
+                    await timers.setTimeout(options.retry.interval);
                 }
-
-                return attempt();
-            };
-
-            if (callback) {
-                deprecateCallback('pettyCache.mutex.lock');
-                invokeCallback(executor(), callback);
-            } else {
-                return executor();
             }
+
+            return attempt();
         },
         /**
-         * Releases a distributed mutex lock in Redis. Supports both callback and promise styles.
+         * Releases a distributed mutex lock in Redis.
          * @param {string} key - The lock key to release.
-         * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
-         * @returns {Promise|undefined}
+         * @returns {Promise}
          */
-        unlock: (key, callback) => {
-            const executor = async () => {
-                await delAsync(key);
-            };
+        unlock: async (key, ...rest) => {
+            assertNoCallback('pettyCache.mutex.unlock', ...rest);
 
-            if (callback) {
-                deprecateCallback('pettyCache.mutex.unlock');
-                invokeCallback(executor(), callback);
-            } else {
-                return executor();
-            }
+            await redisClient.del(key);
         }
     };
 
     /**
      * Updates specific properties of a cached object without replacing the whole value.
-     * Supports both callback and promise styles.
      * @param {string} key - The cache key of the object to patch.
      * @param {Object} value - Properties to merge into the cached object.
      * @param {Object} [options] - Optional settings passed to set().
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
-     * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
-     * @returns {Promise|undefined}
+     * @returns {Promise}
      */
-    this.patch = (key, value, options = {}, callback) => {
-        if (!callback && typeof options === 'function') {
-            callback = options;
-            options = {};
+    this.patch = async (key, value, options = {}, ...rest) => {
+        assertNoCallback('pettyCache.patch', options, ...rest);
+
+        const data = await this.get(key);
+
+        if (!data) {
+            throw new Error(`Key ${key} does not exist`);
         }
 
-        const executor = async () => {
-            const data = await this.get(key);
-
-            if (!data) {
-                throw new Error(`Key ${key} does not exist`);
-            }
-
-            for (let k in value) {
-                data[k] = value[k];
-            }
-
-            await this.set(key, data, options);
-        };
-
-        if (callback) {
-            deprecateCallback('pettyCache.patch');
-            invokeCallback(executor(), callback);
-        } else {
-            return executor();
+        for (let k in value) {
+            data[k] = value[k];
         }
+
+        await this.set(key, data, options);
     };
 
     this.semaphore = {
         /**
          * Acquires a slot in an existing semaphore pool. Retries if no slot is currently available.
-         * Supports both callback and promise styles.
          * @param {string} key - The semaphore key.
          * @param {Object} [options] - Optional settings.
          * @param {number} [options.ttl=1000] - Slot TTL in ms; expired slots may be reclaimed.
          * @param {Object} [options.retry] - Retry options.
          * @param {number} [options.retry.times=1] - Number of acquisition attempts.
          * @param {number} [options.retry.interval=100] - Delay between retries in ms.
-         * @param {Function} [callback] - Optional callback(err, index). If omitted, returns a Promise.
-         * @returns {Promise|undefined} Resolves with the acquired slot index.
+         * @returns {Promise<number>} Resolves with the acquired slot index.
          */
-        acquireLock: (key, options = {}, callback) => {
-            // Options are optional
-            if (!callback && typeof options === 'function') {
-                callback = options;
-                options = {};
-            }
+        acquireLock: async (key, options = {}, ...rest) => {
+            assertNoCallback('pettyCache.semaphore.acquireLock', options, ...rest);
 
             options.retry = Object.hasOwn(options, 'retry') ? options.retry : {};
             options.retry.interval = Object.hasOwn(options.retry, 'interval') ? options.retry.interval : 100;
@@ -750,7 +602,7 @@ function PettyCache() {
                 await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
                 try {
-                    const data = await getAsync(key);
+                    const data = await redisClient.get(key);
 
                     // If we don't have a previously created semaphore, return error
                     if (!data) {
@@ -773,7 +625,7 @@ function PettyCache() {
 
                     pool[index] = { status: 'acquired', ttl: Date.now() + options.ttl };
 
-                    await setAsync(key, JSON.stringify(pool));
+                    await redisClient.set(key, JSON.stringify(pool));
 
                     return index;
                 } finally {
@@ -782,297 +634,225 @@ function PettyCache() {
                 }
             };
 
-            const executor = async () => {
-                let attempts = options.retry.times;
+            let attempts = options.retry.times;
 
-                while (attempts > 1) {
-                    try {
-                        return await attempt();
-                    } catch (err) {
-                        attempts--;
-                        await timers.setTimeout(options.retry.interval);
-                    }
+            while (attempts > 1) {
+                try {
+                    return await attempt();
+                } catch (err) {
+                    attempts--;
+                    await timers.setTimeout(options.retry.interval);
                 }
-
-                return attempt();
-            };
-
-            if (callback) {
-                deprecateCallback('pettyCache.semaphore.acquireLock');
-                invokeCallback(executor(), callback);
-            } else {
-                return executor();
             }
+
+            return attempt();
         },
         /**
          * Permanently consumes a semaphore slot, marking it consumed rather than available.
-         * Ensures at least one slot always remains non-consumed. Supports both callback and promise styles.
+         * Ensures at least one slot always remains non-consumed.
          * @param {string} key - The semaphore key.
          * @param {number} index - The slot index to consume.
-         * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
-         * @returns {Promise|undefined}
+         * @returns {Promise}
          */
-        consumeLock: (key, index, callback) => {
-            const executor = async () => {
-                // Mutex lock around semaphore
-                await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
+        consumeLock: async (key, index, ...rest) => {
+            assertNoCallback('pettyCache.semaphore.consumeLock', ...rest);
 
-                try {
-                    const data = await getAsync(key);
+            // Mutex lock around semaphore
+            await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
-                    // If we don't have a previously created semaphore, return error
-                    if (!data) {
-                        throw new Error(`Semaphore ${key} doesn't exist.`);
-                    }
+            try {
+                const data = await redisClient.get(key);
 
-                    const pool = JSON.parse(data);
-
-                    // Ensure index exists.
-                    if (pool.length <= index) {
-                        throw new Error(`Index ${index} for semaphore ${key} is invalid.`);
-                    }
-
-                    pool[index] = { status: 'consumed' };
-
-                    // Ensure at least one slot isn't consumed
-                    if (pool.every(s => s.status === 'consumed')) {
-                        pool[index] = { status: 'available' };
-                    }
-
-                    await setAsync(key, JSON.stringify(pool));
-                } finally {
-                    // Unlock errors are ignored; the mutex lock expires via its TTL
-                    await this.mutex.unlock(`lock:${key}`).catch(() => {});
+                // If we don't have a previously created semaphore, return error
+                if (!data) {
+                    throw new Error(`Semaphore ${key} doesn't exist.`);
                 }
-            };
 
-            if (callback) {
-                deprecateCallback('pettyCache.semaphore.consumeLock');
-                invokeCallback(executor(), callback);
-            } else {
-                return executor();
+                const pool = JSON.parse(data);
+
+                // Ensure index exists.
+                if (pool.length <= index) {
+                    throw new Error(`Index ${index} for semaphore ${key} is invalid.`);
+                }
+
+                pool[index] = { status: 'consumed' };
+
+                // Ensure at least one slot isn't consumed
+                if (pool.every(s => s.status === 'consumed')) {
+                    pool[index] = { status: 'available' };
+                }
+
+                await redisClient.set(key, JSON.stringify(pool));
+            } finally {
+                // Unlock errors are ignored; the mutex lock expires via its TTL
+                await this.mutex.unlock(`lock:${key}`).catch(() => {});
             }
         },
         /**
          * Increases the size of an existing semaphore pool. Cannot shrink a pool.
-         * Supports both callback and promise styles.
          * @param {string} key - The semaphore key.
          * @param {number} size - The desired pool size (must be >= current size).
-         * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
-         * @returns {Promise|undefined}
+         * @returns {Promise}
          */
-        expand: (key, size, callback) => {
-            const executor = async () => {
-                // Mutex lock around semaphore
-                await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
+        expand: async (key, size, ...rest) => {
+            assertNoCallback('pettyCache.semaphore.expand', ...rest);
 
-                try {
-                    const data = await getAsync(key);
+            // Mutex lock around semaphore
+            await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
-                    // If we don't have a previously created semaphore, return error
-                    if (!data) {
-                        throw new Error(`Semaphore ${key} doesn't exist.`);
-                    }
+            try {
+                const data = await redisClient.get(key);
 
-                    let pool = JSON.parse(data);
-
-                    if (pool.length > size) {
-                        throw new Error(`Cannot shrink pool, size is ${pool.length} and you requested a size of ${size}.`);
-                    }
-
-                    if (pool.length === size) {
-                        return;
-                    }
-
-                    pool = pool.concat(Array(size - pool.length).fill({ status: 'available' }));
-
-                    await setAsync(key, JSON.stringify(pool));
-                } finally {
-                    // Unlock errors are ignored; the mutex lock expires via its TTL
-                    await this.mutex.unlock(`lock:${key}`).catch(() => {});
+                // If we don't have a previously created semaphore, return error
+                if (!data) {
+                    throw new Error(`Semaphore ${key} doesn't exist.`);
                 }
-            };
 
-            if (callback) {
-                deprecateCallback('pettyCache.semaphore.expand');
-                invokeCallback(executor(), callback);
-            } else {
-                return executor();
+                let pool = JSON.parse(data);
+
+                if (pool.length > size) {
+                    throw new Error(`Cannot shrink pool, size is ${pool.length} and you requested a size of ${size}.`);
+                }
+
+                if (pool.length === size) {
+                    return;
+                }
+
+                pool = pool.concat(Array(size - pool.length).fill({ status: 'available' }));
+
+                await redisClient.set(key, JSON.stringify(pool));
+            } finally {
+                // Unlock errors are ignored; the mutex lock expires via its TTL
+                await this.mutex.unlock(`lock:${key}`).catch(() => {});
             }
         },
         /**
          * Releases an acquired semaphore slot, marking it available again.
-         * Supports both callback and promise styles.
          * @param {string} key - The semaphore key.
          * @param {number} index - The slot index to release.
-         * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
-         * @returns {Promise|undefined}
+         * @returns {Promise}
          */
-        releaseLock: (key, index, callback) => {
-            const executor = async () => {
-                // Mutex lock around semaphore
-                await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
+        releaseLock: async (key, index, ...rest) => {
+            assertNoCallback('pettyCache.semaphore.releaseLock', ...rest);
 
-                try {
-                    const data = await getAsync(key);
+            // Mutex lock around semaphore
+            await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
-                    // If we don't have a previously created semaphore, return error
-                    if (!data) {
-                        throw new Error(`Semaphore ${key} doesn't exist.`);
-                    }
+            try {
+                const data = await redisClient.get(key);
 
-                    const pool = JSON.parse(data);
-
-                    // Ensure index exists.
-                    if (pool.length <= index) {
-                        throw new Error(`Index ${index} for semaphore ${key} is invalid.`);
-                    }
-
-                    pool[index] = { status: 'available' };
-
-                    await setAsync(key, JSON.stringify(pool));
-                } finally {
-                    // Unlock errors are ignored; the mutex lock expires via its TTL
-                    await this.mutex.unlock(`lock:${key}`).catch(() => {});
+                // If we don't have a previously created semaphore, return error
+                if (!data) {
+                    throw new Error(`Semaphore ${key} doesn't exist.`);
                 }
-            };
 
-            if (callback) {
-                deprecateCallback('pettyCache.semaphore.releaseLock');
-                invokeCallback(executor(), callback);
-            } else {
-                return executor();
+                const pool = JSON.parse(data);
+
+                // Ensure index exists.
+                if (pool.length <= index) {
+                    throw new Error(`Index ${index} for semaphore ${key} is invalid.`);
+                }
+
+                pool[index] = { status: 'available' };
+
+                await redisClient.set(key, JSON.stringify(pool));
+            } finally {
+                // Unlock errors are ignored; the mutex lock expires via its TTL
+                await this.mutex.unlock(`lock:${key}`).catch(() => {});
             }
         },
         /**
          * Resets all slots in an existing semaphore pool to available.
-         * Supports both callback and promise styles.
          * @param {string} key - The semaphore key.
-         * @param {Function} [callback] - Optional callback(err, pool). If omitted, returns a Promise.
-         * @returns {Promise|undefined} Resolves with the reset pool.
+         * @returns {Promise<Array>} Resolves with the reset pool.
          */
-        reset: (key, callback) => {
-            const executor = async () => {
-                // Mutex lock around semaphore
-                await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
+        reset: async (key, ...rest) => {
+            assertNoCallback('pettyCache.semaphore.reset', ...rest);
 
-                try {
-                    // Try to get previously created semaphore
-                    const data = await getAsync(key);
+            // Mutex lock around semaphore
+            await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
-                    // If we don't have a previously created semaphore, return error
-                    if (!data) {
-                        throw new Error(`Semaphore ${key} doesn't exist.`);
-                    }
+            try {
+                // Try to get previously created semaphore
+                const data = await redisClient.get(key);
 
-                    let pool = JSON.parse(data);
-                    pool = Array(pool.length).fill({ status: 'available' });
-
-                    await setAsync(key, JSON.stringify(pool));
-
-                    return pool;
-                } finally {
-                    // Unlock errors are ignored; the mutex lock expires via its TTL
-                    await this.mutex.unlock(`lock:${key}`).catch(() => {});
+                // If we don't have a previously created semaphore, return error
+                if (!data) {
+                    throw new Error(`Semaphore ${key} doesn't exist.`);
                 }
-            };
 
-            if (callback) {
-                deprecateCallback('pettyCache.semaphore.reset');
-                invokeCallback(executor(), callback);
-            } else {
-                return executor();
+                let pool = JSON.parse(data);
+                pool = Array(pool.length).fill({ status: 'available' });
+
+                await redisClient.set(key, JSON.stringify(pool));
+
+                return pool;
+            } finally {
+                // Unlock errors are ignored; the mutex lock expires via its TTL
+                await this.mutex.unlock(`lock:${key}`).catch(() => {});
             }
         },
         /**
          * Retrieves an existing semaphore pool, or creates one if it doesn't exist.
-         * Supports both callback and promise styles.
          * @param {string} key - The semaphore key.
          * @param {Object} [options] - Optional settings.
-         * @param {number|Function} [options.size=1] - Pool size, or a function that resolves the size. Use size(callback) for callbacks or async size() for promises.
-         * @param {Function} [callback] - Optional callback(err, pool). If omitted, returns a Promise.
-         * @returns {Promise|undefined} Resolves with the semaphore pool.
+         * @param {number|Function} [options.size=1] - Pool size, or an async function that resolves the size.
+         * @returns {Promise<Array>} Resolves with the semaphore pool.
          */
-        retrieveOrCreate: (key, options = {}, callback) => {
-            // Options are optional
-            if (!callback && typeof options === 'function') {
-                callback = options;
-                options = {};
-            }
+        retrieveOrCreate: async (key, options = {}, ...rest) => {
+            assertNoCallback('pettyCache.semaphore.retrieveOrCreate', options, ...rest);
 
-            const executor = async () => {
-                // Mutex lock around semaphore retrival or creation
-                await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
+            // Mutex lock around semaphore retrival or creation
+            await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
-                try {
-                    // Try to get previously created semaphore
-                    const data = await getAsync(key);
+            try {
+                // Try to get previously created semaphore
+                const data = await redisClient.get(key);
 
-                    // If we retreived a previously created semaphore, return it
-                    if (data) {
-                        return JSON.parse(data);
-                    }
-
-                    let size;
-
-                    if (typeof options.size === 'function') {
-                        size = await executeFunc(options.size);
-                    } else {
-                        size = Object.hasOwn(options, 'size') ? options.size : 1;
-                    }
-
-                    const pool = Array(Math.max(size, 1)).fill({ status: 'available' });
-
-                    await setAsync(key, JSON.stringify(pool));
-
-                    return pool;
-                } finally {
-                    // Unlock errors are ignored; the mutex lock expires via its TTL
-                    await this.mutex.unlock(`lock:${key}`).catch(() => {});
+                // If we retreived a previously created semaphore, return it
+                if (data) {
+                    return JSON.parse(data);
                 }
-            };
 
-            if (callback) {
-                deprecateCallback('pettyCache.semaphore.retrieveOrCreate');
-                invokeCallback(executor(), callback);
-            } else {
-                return executor();
+                let size;
+
+                if (typeof options.size === 'function') {
+                    size = await options.size();
+                } else {
+                    size = Object.hasOwn(options, 'size') ? options.size : 1;
+                }
+
+                const pool = Array(Math.max(size, 1)).fill({ status: 'available' });
+
+                await redisClient.set(key, JSON.stringify(pool));
+
+                return pool;
+            } finally {
+                // Unlock errors are ignored; the mutex lock expires via its TTL
+                await this.mutex.unlock(`lock:${key}`).catch(() => {});
             }
         }
     };
 
     /**
-     * Stores a value in both the memory cache and Redis. Supports both callback and promise styles.
+     * Stores a value in both the memory cache and Redis.
      * @param {string} key - The cache key.
      * @param {*} value - The value to cache.
      * @param {Object} [options] - Optional settings.
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
-     * @param {Function} [callback] - Optional callback(err). If omitted, returns a Promise.
-     * @returns {Promise|undefined}
+     * @returns {Promise}
      */
-    this.set = (key, value, options = {}, callback) => {
-        if (typeof options === 'function') {
-            callback = options;
-            options = {};
-        }
+    this.set = async (key, value, options = {}, ...rest) => {
+        assertNoCallback('pettyCache.set', options, ...rest);
 
         // Get TTL based on specified options
         const ttl = getTtl(options);
 
-        const executor = async () => {
-            // Store value in memory cache with a short expiration
-            memoryCache.put(key, value, random(2000, 5000));
+        // Store value in memory cache with a short expiration
+        memoryCache.put(key, value, random(2000, 5000));
 
-            // Store value in Redis
-            await psetexAsync(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
-        };
-
-        if (callback) {
-            deprecateCallback('pettyCache.set');
-            invokeCallback(executor(), callback);
-        } else {
-            return executor();
-        }
+        // Store value in Redis
+        await redisClient.pSetEx(key, random(ttl.min, ttl.max), PettyCache.stringify(value));
     };
 }
 

@@ -2,7 +2,7 @@
     "dependencies": {
         "lock": "~1.1.0",
         "memory-cache": "~0.2.0",
-        "redis": "~3.1.0"
+        "redis": "~6.2.1"
     },
     "description": "A cache module for node.js that uses a two-level cache (in-memory cache for recently accessed data plus Redis for distributed caching) with some extra features to avoid cache stampedes and thundering herds.",
     "devDependencies": {
@@ -29,5 +29,5 @@
         "test": "node --test --test-force-exit --test-reporter=spec",
         "test:only": "node --test --test-force-exit --test-only --test-reporter=spec"
     },
-    "version": "4.0.1"
+    "version": "5.0.0"
 }

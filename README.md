@@ -9,7 +9,7 @@ A cache module for Node.js that uses a two-level cache (in-memory cache for rece
 
 Also includes mutex and semaphore distributed locking primitives.
 
-As of v4, every function supports both promises (async/await) and callbacks — omit the callback to receive a promise. Callback support is deprecated and will be removed in v5; callback-style usage emits a Node.js `DeprecationWarning`.
+As of v5, every function returns a promise and callbacks are no longer supported — passing a callback rejects with a `TypeError`. Cache-miss functions must be async (or plain-return) functions. If you need callback support, use v4, which supports both styles and emits deprecation warnings for callback usage. See the [v4 to v5 migration guide](docs/v4-to-v5.md).
 
 ## Features
 
@@ -36,29 +36,28 @@ const PettyCache = require('petty-cache');
 const pettyCache = new PettyCache();
 
 // Fetch some data
-pettyCache.fetch('key', function(callback) {
+const value = await pettyCache.fetch('key', async () => {
     // This function is called on a cache miss
-    fs.readFile('file.txt', callback);
-}, function(err, value) {
-    // This callback is called once petty-cache has loaded data from cache or executed the specified cache miss function
-    console.log(value);
+    return await fs.readFile('file.txt');
 });
 ```
 
 ## API
 
-### new PettyCache([port, [host, [options]]])
+### new PettyCache([options])
 
-Creates a new petty-cache client. `port`, `host`, and `options` are passed directly to [redis.createClient()](https://www.npmjs.com/package/redis#rediscreateclient).
+Creates a new petty-cache client backed by [node-redis](https://www.npmjs.com/package/redis) v6 and connects it automatically. `options` is passed to [redis.createClient()](https://www.npmjs.com/package/redis) untouched.
+
+v4's `(port, host, options)` signature and node-redis v3 option names are not supported; see the [v4 to v5 migration guide](docs/v4-to-v5.md).
 
 **Example**
 ```javascript
-const pettyCache = new PettyCache(6379, 'localhost', { auth_pass: 'secret' });
+const pettyCache = new PettyCache({ password: 'secret', socket: { host: 'localhost', port: 6379 } });
 ```
 
 ### new PettyCache(RedisClient)
 
-Alternatively, you can inject your own [RedisClient](https://www.npmjs.com/package/redis) into Petty Cache.
+Alternatively, you can inject your own node-redis v6 client into Petty Cache. If the client isn't already connected, petty-cache connects it.
 
 **Example**
 ```javascript
@@ -66,26 +65,11 @@ const redisClient = redis.createClient();
 const pettyCache = new PettyCache(redisClient);
 ```
 
-### pettyCache.bulkFetch(keys, cacheMissFunction, [options, [callback]])
+### pettyCache.bulkFetch(keys, cacheMissFunction, [options])
 
-Attempts to retrieve the values of the keys specified in the `keys` array. Any keys that aren't found are passed to cacheMissFunction as an array along with a callback that takes an error and an object, expecting the keys of the object to be the keys passed to `cacheMissFunction` and the values to be the values that should be stored in cache for the corresponding key.  Either way, the resulting error or key-value hash of all requested keys is passed to `callback`. Supports both callbacks and promises.
+Attempts to retrieve the values of the keys specified in the `keys` array. Any keys that aren't found are passed to cacheMissFunction as an array. `cacheMissFunction` should retrieve the expected values for the missing keys from another source and return an object, expecting the keys of the object to be the keys passed to `cacheMissFunction` and the values to be the values that should be stored in cache for the corresponding key. Resolves with a key-value hash of all requested keys.
 
 **Example**
-
-```javascript
-// Let's assume a and b are already cached as 1 and 2
-pettyCache.bulkFetch(['a', 'b', 'c', 'd'], function(keys, callback) {
-    const results = {};
-
-    keys.forEach(function(key) {
-        results[key] = key.toUpperCase();
-    });
-
-    callback(null, results);
-}, function(err, values) {
-    console.log(values); // {a: 1, b: 2, c: 'C', d: 'D'}
-});
-```
 
 ```javascript
 // Let's assume a and b are already cached as 1 and 2
@@ -120,35 +104,21 @@ console.log(values); // {a: 1, b: 2, c: 'C', d: 'D'}
 }
 ```
 
-### pettyCache.bulkGet(keys, [callback])
+### pettyCache.bulkGet(keys)
 
-Attempts to retrieve the values of the keys specified in the `keys` array. Returns a key-value hash of all specified keys with either the corresponding values from cache or `null` if a key was not found. Supports both callbacks and promises.
+Attempts to retrieve the values of the keys specified in the `keys` array. Resolves with a key-value hash of all specified keys with either the corresponding values from cache or `null` if a key was not found.
 
 **Example**
-
-```javascript
-pettyCache.bulkGet(['key1', 'key2', 'key3'], function(err, values) {
-    console.log(values);
-});
-```
 
 ```javascript
 const values = await pettyCache.bulkGet(['key1', 'key2', 'key3']);
 ```
 
-### pettyCache.bulkSet(values, [options, [callback]])
+### pettyCache.bulkSet(values, [options])
 
-Unconditionally sets the values for the specified keys. Supports both callbacks and promises.
+Unconditionally sets the values for the specified keys.
 
 **Example**
-
-```javascript
-pettyCache.bulkSet({ key1: 'one', key2: 2, key3: 'three' }, function(err) {
-    if (err) {
-        // Handle error
-    }
-});
-```
 
 ```javascript
 await pettyCache.bulkSet({ key1: 'one', key2: 2, key3: 'three' });
@@ -172,49 +142,31 @@ await pettyCache.bulkSet({ key1: 'one', key2: 2, key3: 'three' });
 }
 ```
 
-### pettyCache.del(key, [callback])
+### pettyCache.close()
 
-Deletes a value from both the in-memory cache and Redis. Supports both callbacks and promises.
+Stops the background refresh intervals started by `pettyCache.fetchAndRefresh` and gracefully closes the Redis client connection.
 
 **Example**
 
 ```javascript
-pettyCache.del('key', function(err) {
-    if (err) {
-        // Handle redis error
-    }
-});
+await pettyCache.close();
 ```
+
+### pettyCache.del(key)
+
+Deletes a value from both the in-memory cache and Redis.
+
+**Example**
 
 ```javascript
 await pettyCache.del('key');
 ```
 
-### pettyCache.fetch(key, cacheMissFunction, [options, [callback]])
+### pettyCache.fetch(key, cacheMissFunction, [options])
 
-Attempts to retrieve the value from cache at the specified key. If it doesn't exist, it executes the specified cacheMissFunction that takes two parameters: an error and a value. `cacheMissFunction` should retrieve the expected value for the key from another source and pass it to the given callback. Either way, the resulting error or value is passed to `callback`. Supports both callbacks and promises.
+Attempts to retrieve the value from cache at the specified key. If it doesn't exist, it executes the specified cacheMissFunction, which should retrieve the expected value for the key from another source and return it. Either way, resolves with the resulting value.
 
 **Example**
-
-```javascript
-pettyCache.fetch('key', function(callback) {
-    // This function is called on a cache miss
-    fs.readFile('file.txt', callback);
-}, function(err, value) {
-    // This callback is called once petty-cache has loaded data from cache or executed the specified cache miss function
-    console.log(value);
-});
-```
-
-```javascript
-pettyCache.fetch('key', async () => {
-    // This function is called on a cache miss
-    return await fs.readFile('file.txt');
-}, function(err, value) {
-    // This callback is called once petty-cache has loaded data from cache or executed the specified cache miss function
-    console.log(value);
-});
-```
 
 ```javascript
 const value = await pettyCache.fetch('key', async () => {
@@ -241,20 +193,11 @@ const value = await pettyCache.fetch('key', async () => {
 }
 ```
 
-### pettyCache.fetchAndRefresh(key, cacheMissFunction, [options, [callback]])
+### pettyCache.fetchAndRefresh(key, cacheMissFunction, [options])
 
-Similar to `pettyCache.fetch` but this method continually refreshes the data in cache by executing the specified cacheMissFunction before the TTL expires. Supports both callbacks and promises.
+Similar to `pettyCache.fetch` but this method continually refreshes the data in cache by executing the specified cacheMissFunction before the TTL expires.
 
 **Example**
-
-```javascript
-pettyCache.fetchAndRefresh('key', function(callback) {
-    // This function is called on a cache miss and every TTL/2 milliseconds
-    fs.readFile('file.txt', callback);
-}, function(err, value) {
-    console.log(value);
-});
-```
 
 ```javascript
 const value = await pettyCache.fetchAndRefresh('key', async () => {
@@ -281,41 +224,26 @@ const value = await pettyCache.fetchAndRefresh('key', async () => {
 }
 ```
 
-### pettyCache.get(key, [callback])
+### pettyCache.get(key)
 
-Attempts to retrieve the value from cache at the specified key. Returns `null` if the key doesn't exist. Supports both callbacks and promises.
+Attempts to retrieve the value from cache at the specified key. Resolves with `null` if the key doesn't exist.
 
 **Example**
-
-```javascript
-pettyCache.get('key', function(err, value) {
-    // `value` contains the value of the key if it was found in the in-memory cache or Redis. `value` is `null` if the key was not found.
-    console.log(value);
-});
-```
 
 ```javascript
 const value = await pettyCache.get('key');
 ```
 
-### pettyCache.patch(key, value, [options, [callback]])
+### pettyCache.patch(key, value, [options])
 
-Updates an object at the given key with the property values provided. Sends an error to the callback if the key does not exist. Supports both callbacks and promises.
+Updates an object at the given key with the property values provided. Rejects if the key does not exist.
 
 **Example**
 
 ```javascript
-pettyCache.patch('key', { a: 1 }, function(err) {
-    if (err) {
-        // Handle redis or key not found error
-    }
-
-    // The object stored at 'key' now has a property 'a' with the value 1. Its other values are intact.
-});
-```
-
-```javascript
 await pettyCache.patch('key', { a: 1 });
+
+// The object stored at 'key' now has a property 'a' with the value 1. Its other values are intact.
 ```
 
 **Options**
@@ -336,19 +264,11 @@ await pettyCache.patch('key', { a: 1 });
 }
 ```
 
-### pettyCache.set(key, value, [options, [callback]])
+### pettyCache.set(key, value, [options])
 
-Unconditionally sets a value for a given key. Supports both callbacks and promises.
+Unconditionally sets a value for a given key.
 
 **Example**
-
-```javascript
-pettyCache.set('key', { a: 'b' }, function(err) {
-    if (err) {
-        // Handle redis error
-    }
-});
-```
 
 ```javascript
 await pettyCache.set('key', { a: 'b' });
@@ -390,20 +310,9 @@ const text = PettyCache.stringify({ a: null }); // '{"a":"__null"}'
 
 ## Mutex
 
-### pettyCache.mutex.lock(key, [options, [callback]])
+### pettyCache.mutex.lock(key, [options])
 
-Attempts to acquire a distributed lock for the specified key. Optionally retries a specified number of times by waiting a specified amount of time between attempts. Supports both callbacks and promises.
-
-```javascript
-pettyCache.mutex.lock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 }, function(err) {
-    if (err) {
-        // We weren't able to acquire the lock (even after trying 5 times every 100 milliseconds).
-    }
-
-    // We were able to acquire the lock. Do work and then unlock.
-    pettyCache.mutex.unlock('key');
-});
-```
+Attempts to acquire a distributed lock for the specified key. Optionally retries a specified number of times by waiting a specified amount of time between attempts.
 
 ```javascript
 await pettyCache.mutex.lock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 });
@@ -424,17 +333,9 @@ await pettyCache.mutex.unlock('key');
 }
 ```
 
-### pettyCache.mutex.unlock(key, [callback])
+### pettyCache.mutex.unlock(key)
 
-Releases the distributed lock for the specified key. Supports both callbacks and promises.
-
-```javascript
-pettyCache.mutex.unlock('key', function(err) {
-    if (err) {
-        // We weren't able to reach Redis. Your lock will expire after its TTL, but you might want to log this error.
-    }
-});
-```
+Releases the distributed lock for the specified key.
 
 ```javascript
 await pettyCache.mutex.unlock('key');
@@ -448,48 +349,21 @@ Provides a pool of distributed locks. Once a consumer acquires a lock they have 
 
 ```javascript
 // Create a new semaphore
-pettyCache.semaphore.retrieveOrCreate('key', { size: 10 }, function(err) {
-    if (err) {
-        // Aw, snap! We couldn't create the semaphore
-    }
+await pettyCache.semaphore.retrieveOrCreate('key', { size: 10 });
 
-    // Acquire a lock from the semaphore's pool
-    pettyCache.semaphore.acquireLock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 }, function(err, index) {
-        if (err) {
-            // We couldn't acquire a lock from the semaphore's pool (even after trying 5 times every 100 milliseconds).
-        }
-
-        // We were able to acquire a lock from the semaphore's pool. Do work and then release the lock.
-        pettyCache.semaphore.releaseLock('key', index, function(err) {
-            if (err) {
-                // We weren't able to reach Redis. Your lock will expire after its TTL, but you might want to log this error.
-            }
-        });
-
-        // Or, rather than releasing the lock back to the semaphore's pool you can mark the lock as "consumed" to prevent it from being used again.
-        pettyCache.semaphore.consumeLock('key', index, function(err) {
-            if (err) {
-                // We weren't able to reach Redis. Your lock will expire after its TTL, but you might want to log this error.
-            }
-        });
-    });
-});
-```
-
-### pettyCache.semaphore.acquireLock(key, [options, [callback]])
-
-Attempts to acquire a lock from the semaphore's pool. Optionally retries a specified number of times by waiting a specified amount of time between attempts. Supports both callbacks and promises.
-
-```javascript
 // Acquire a lock from the semaphore's pool
-pettyCache.semaphore.acquireLock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 }, function(err, index) {
-    if (err) {
-        // We couldn't acquire a lock from the semaphore's pool (even after trying 5 times every 100 milliseconds).
-    }
+const index = await pettyCache.semaphore.acquireLock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 });
 
-    // We were able to acquire a lock from the semaphore's pool. Do work and then release the lock.
-});
+// We were able to acquire a lock from the semaphore's pool. Do work and then release the lock.
+await pettyCache.semaphore.releaseLock('key', index);
+
+// Or, rather than releasing the lock back to the semaphore's pool you can mark the lock as "consumed" to prevent it from being used again.
+await pettyCache.semaphore.consumeLock('key', index);
 ```
+
+### pettyCache.semaphore.acquireLock(key, [options])
+
+Attempts to acquire a lock from the semaphore's pool. Optionally retries a specified number of times by waiting a specified amount of time between attempts. Resolves with the index of the acquired slot.
 
 ```javascript
 const index = await pettyCache.semaphore.acquireLock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 });
@@ -507,84 +381,41 @@ const index = await pettyCache.semaphore.acquireLock('key', { retry: { interval:
 }
 ```
 
-### pettyCache.semaphore.consumeLock(key, index, [callback])
+### pettyCache.semaphore.consumeLock(key, index)
 
-Mark the lock at the specified index as "consumed" to prevent it from being used again. Supports both callbacks and promises.
-
-```javascript
-pettyCache.semaphore.consumeLock('key', index, function(err) {
-    if (err) {
-        // We weren't able to reach Redis. Your lock will expire after its TTL, but you might want to log this error.
-    }
-});
-```
+Mark the lock at the specified index as "consumed" to prevent it from being used again.
 
 ```javascript
 await pettyCache.semaphore.consumeLock('key', index);
 ```
 
-### pettyCache.semaphore.expand(key, size, [callback])
+### pettyCache.semaphore.expand(key, size)
 
-Expand the number of locks in the specified semaphore's pool. Supports both callbacks and promises.
-
-```javascript
-pettyCache.semaphore.expand(key, 100, function(err) {
-    if (err) {
-        // We weren't able to expand the semaphore.
-    }
-});
-```
+Expand the number of locks in the specified semaphore's pool.
 
 ```javascript
 await pettyCache.semaphore.expand(key, 100);
 ```
 
-### pettyCache.semaphore.releaseLock(key, index, [callback])
+### pettyCache.semaphore.releaseLock(key, index)
 
-Releases the lock at the specified index back to the semaphore's pool so that it can be used again. Supports both callbacks and promises.
-
-```javascript
-pettyCache.semaphore.releaseLock('key', index, function(err) {
-    if (err) {
-        // We weren't able to reach Redis. Your lock will expire after its TTL, but you might want to log this error.
-    }
-});
-```
+Releases the lock at the specified index back to the semaphore's pool so that it can be used again.
 
 ```javascript
 await pettyCache.semaphore.releaseLock('key', index);
 ```
 
-### pettyCache.semaphore.reset(key, [callback])
+### pettyCache.semaphore.reset(key)
 
-Resets all locks in the semaphore's pool to available, releasing them all (even those that have been marked as "consumed"). The pool keeps its current size, including any expansions. Supports both callbacks and promises.
-
-```javascript
-pettyCache.semaphore.reset('key', function(err) {
-    if (err) {
-        // We weren't able to reset the semaphore.
-    }
-});
-```
+Resets all locks in the semaphore's pool to available, releasing them all (even those that have been marked as "consumed"). The pool keeps its current size, including any expansions. Resolves with the reset pool.
 
 ```javascript
 const pool = await pettyCache.semaphore.reset('key');
 ```
 
-### pettyCache.semaphore.retrieveOrCreate(key, [options, [callback]])
+### pettyCache.semaphore.retrieveOrCreate(key, [options])
 
-Retrieves a previously created semaphore or creates a new semaphore with the optionally specified number of locks in its pool. Supports both callbacks and promises.
-
-```javascript
-// Create a new semaphore
-pettyCache.semaphore.retrieveOrCreate('key', { size: 10 }, function(err) {
-    if (err) {
-        // Aw, snap! We couldn't create the semaphore
-    }
-
-    // Your semaphore was created.
-});
-```
+Retrieves a previously created semaphore or creates a new semaphore with the optionally specified number of locks in its pool. Resolves with the semaphore's pool.
 
 ```javascript
 const semaphore = await pettyCache.semaphore.retrieveOrCreate('key', { size: 10 });
@@ -594,6 +425,6 @@ const semaphore = await pettyCache.semaphore.retrieveOrCreate('key', { size: 10 
 
 ```javascript
 {
-    size: 1 || function() { const x = 1 + 1; callback(null, x); } // The number of locks to create in the semaphore's pool. Optionally, size can be a `callback(err, size)` function or an async function.
+    size: 1 // The number of locks to create in the semaphore's pool. Optionally, size can be an async function that resolves the size.
 }
 ```

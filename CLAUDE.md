@@ -17,7 +17,7 @@ npm test
 npm run coveralls
 
 # Run a single test file
-npx mocha test/index.js
+node --test --test-force-exit --test-reporter=spec test/index.js
 ```
 
 ### Linting
@@ -36,11 +36,10 @@ npm install
 
 ### Core Structure
 - **Main Entry**: `index.js` - Contains the PettyCache class and all public API methods
-- **Test Suite**: `test/index.js` - Comprehensive Mocha test suite testing all cache operations, mutex, and semaphore functionality
+- **Test Suite**: `test/index.js` - Comprehensive node:test suite testing all cache operations, mutex, and semaphore functionality
 - **Dependencies**:
-  - `redis` (v3.1.0) - Redis client for distributed caching
+  - `redis` (v6) - Redis client for distributed caching; petty-cache connects it automatically
   - `memory-cache` (v0.2.0) - In-memory cache for recently accessed data
-  - `async` (v3.2.6) - Async utility functions
   - `lock` (v1.1.0) - Local locking mechanism
 
 ### Key Design Patterns
