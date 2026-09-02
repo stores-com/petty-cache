@@ -104,10 +104,47 @@ Plain-return functions (`() => value`) also work anywhere an async function is a
 
 petty-cache now uses [node-redis](https://www.npmjs.com/package/redis) v6 and connects the client automatically.
 
-- **Positional constructor arguments keep working.** `new PettyCache(port, host, options)` is translated to node-redis options. The port may be a number or a numeric string, so the usual `new PettyCache(process.env.redisPort, process.env.redisHost, { auth_pass: process.env.redisPassword })` needs no change.
-- **Common v3 options are translated.** `auth_pass`, `connect_timeout`, `db`, `enable_offline_queue`, `family`, `host`, `path`, `port`, `socket_initial_delay`, `socket_keepalive`, and `tls` are translated to their node-redis v6 equivalents, whether passed positionally or as an options object. Options already in the v6 shape pass through untouched.
-- **Options with no v6 equivalent throw.** `detect_buffers`, `prefix`, `rename_commands`, `retry_strategy`, `return_buffers`, and `string_numbers` throw a `TypeError` rather than being silently ignored. Reimplement those with node-redis v6 options (e.g. `retry_strategy` becomes `socket.reconnectStrategy`, which receives the retry count and returns a delay in milliseconds).
-- **Injected clients must be node-redis v6 clients.** `new PettyCache(redisClient)` requires a client created by `redis@6`'s `createClient()`. petty-cache connects it if it isn't already connected.
+**The constructor takes a node-redis v6 options object.** The v4 `(port, host, options)` signature is gone, and so is the translation of v3 option names.
+
+**Before**
+
+```javascript
+const pettyCache = new PettyCache(process.env.redisPort, process.env.redisHost, { auth_pass: process.env.redisPassword, enable_offline_queue: false });
+```
+
+**After**
+
+```javascript
+const pettyCache = new PettyCache({ disableOfflineQueue: true, password: process.env.redisPassword, socket: { host: process.env.redisHost, port: process.env.redisPort } });
+```
+
+Both old forms throw a `TypeError` that names what to change:
+
+```
+TypeError: petty-cache v5 takes a node-redis options object. The (port, host, options)
+signature was removed; see docs/v4-to-v5.md.
+
+TypeError: petty-cache v5 takes a node-redis options object. auth_pass, host, port are
+node-redis v3 options and would be ignored; see docs/v4-to-v5.md.
+```
+
+They throw rather than translate deliberately. v6 ignores unknown top-level options, so a v3 options object silently yields an unauthenticated client pointed at localhost:6379 — a cache that never hits and never errors. Failing at construction is the whole point of the breaking change.
+
+Option names that moved:
+
+| v3 | v6 |
+| --- | --- |
+| `auth_pass` | `password` |
+| `host`, `port`, `path` | `socket.host`, `socket.port`, `socket.path` |
+| `db` | `database` |
+| `enable_offline_queue: false` | `disableOfflineQueue: true` |
+| `connect_timeout` | `socket.connectTimeout` |
+| `socket_keepalive`, `socket_initial_delay` | `socket.keepAlive`, `socket.keepAliveInitialDelay` |
+| `family` | `socket.family` (a number, not `'IPv4'`) |
+| `tls: {...}` | `socket.tls: true` plus the TLS options on `socket` |
+| `retry_strategy` | `socket.reconnectStrategy` |
+
+**Injected clients must be node-redis v6 clients.** `new PettyCache(redisClient)` requires a client created by `redis@6`'s `createClient()`. petty-cache connects it if it isn't already connected.
 
 ## New: close()
 

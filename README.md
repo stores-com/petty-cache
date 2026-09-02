@@ -44,15 +44,13 @@ const value = await pettyCache.fetch('key', async () => {
 
 ## API
 
-### new PettyCache([port, [host, [options]]])
+### new PettyCache([options])
 
-Creates a new petty-cache client backed by [node-redis](https://www.npmjs.com/package/redis) v6 and connects it automatically. The legacy positional `port` and `host` arguments and common node-redis v3 options (`auth_pass`, `connect_timeout`, `db`, `enable_offline_queue`, `host`, `port`, `tls`, and friends) are translated to node-redis v6 options; anything already in the v6 shape is passed to [redis.createClient()](https://www.npmjs.com/package/redis) untouched, and legacy options with no v6 equivalent (e.g. `retry_strategy`) throw.
+Creates a new petty-cache client backed by [node-redis](https://www.npmjs.com/package/redis) v6 and connects it automatically. `options` is passed to [redis.createClient()](https://www.npmjs.com/package/redis) untouched.
+
+The v4 `(port, host, options)` signature and node-redis v3 option names were removed in v5. Both throw a `TypeError` naming what to change rather than being translated, because a mistranslated option silently produces an unauthenticated client pointed at localhost.
 
 **Example**
-```javascript
-const pettyCache = new PettyCache(6379, 'localhost', { auth_pass: 'secret' });
-```
-
 ```javascript
 const pettyCache = new PettyCache({ password: 'secret', socket: { host: 'localhost', port: 6379 } });
 ```

@@ -4,6 +4,8 @@ const lock = require('lock').Lock();
 const memoryCache = require('memory-cache');
 const redis = require('redis');
 
+const LEGACY_OPTIONS = ['auth_pass', 'connect_timeout', 'db', 'detect_buffers', 'enable_offline_queue', 'family', 'host', 'no_ready_check', 'path', 'port', 'prefix', 'rename_commands', 'retry_strategy', 'return_buffers', 'socket_initial_delay', 'socket_keepalive', 'string_numbers', 'tls'];
+
 /**
  * Acquires the in-process lock for the given key and resolves once it's held.
  * @param {string} key
@@ -26,19 +28,6 @@ function assertNoCallback(name, ...args) {
     }
 }
 
-/**
- * Determines whether a value is a port number. Numeric strings count: ports usually arrive
- * from the environment (e.g. process.env.redisPort), which is always a string.
- * @param {*} value
- * @returns {boolean}
- */
-function isPort(value) {
-    if (typeof value === 'number') {
-        return true;
-    }
-
-    return typeof value === 'string' && value.trim().length !== 0 && Number.isInteger(Number(value));
-}
 
 /**
  * Returns a random integer between min and max, inclusive.
@@ -54,114 +43,29 @@ function random(min, max) {
     return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
-/**
- * Translates legacy node-redis v3 options to their v6 equivalents. Options already in the
- * v6 shape pass through untouched; legacy options with no v6 equivalent throw a TypeError.
- * @param {Object} [legacyOptions]
- * @returns {Object} node-redis v6 options.
- */
-function translateLegacyOptions(legacyOptions) {
-    const options = Object.assign({}, legacyOptions);
-    const socket = Object.assign({}, options.socket);
-
-    ['detect_buffers', 'prefix', 'rename_commands', 'retry_strategy', 'return_buffers', 'string_numbers'].forEach(key => {
-        if (Object.hasOwn(options, key)) {
-            throw new TypeError(`The legacy ${key} option has no node-redis v6 equivalent. See https://www.npmjs.com/package/redis for the v6 options.`);
-        }
-    });
-
-    if (options.auth_pass) {
-        options.password = options.auth_pass;
-        delete options.auth_pass;
-    }
-
-    if (Object.hasOwn(options, 'connect_timeout')) {
-        socket.connectTimeout = options.connect_timeout;
-        delete options.connect_timeout;
-    }
-
-    if (Object.hasOwn(options, 'db')) {
-        options.database = options.db;
-        delete options.db;
-    }
-
-    if (Object.hasOwn(options, 'enable_offline_queue')) {
-        options.disableOfflineQueue = !options.enable_offline_queue;
-        delete options.enable_offline_queue;
-    }
-
-    if (Object.hasOwn(options, 'family')) {
-        socket.family = options.family === 'IPv4' ? 4 : options.family === 'IPv6' ? 6 : options.family;
-        delete options.family;
-    }
-
-    if (Object.hasOwn(options, 'host')) {
-        socket.host = options.host;
-        delete options.host;
-    }
-
-    // v6 has no ready check to disable
-    delete options.no_ready_check;
-
-    if (Object.hasOwn(options, 'path')) {
-        socket.path = options.path;
-        delete options.path;
-    }
-
-    if (Object.hasOwn(options, 'port')) {
-        socket.port = options.port;
-        delete options.port;
-    }
-
-    if (Object.hasOwn(options, 'socket_initial_delay')) {
-        socket.keepAliveInitialDelay = options.socket_initial_delay;
-        delete options.socket_initial_delay;
-    }
-
-    if (Object.hasOwn(options, 'socket_keepalive')) {
-        socket.keepAlive = options.socket_keepalive;
-        delete options.socket_keepalive;
-    }
-
-    if (Object.hasOwn(options, 'tls')) {
-        Object.assign(socket, options.tls === true ? {} : options.tls, { tls: true });
-        delete options.tls;
-    }
-
-    if (Object.keys(socket).length) {
-        options.socket = socket;
-    }
-
-    return options;
-}
 
 /**
  * Creates a new PettyCache instance backed by Redis.
- * Accepts a node-redis client instance, a redis.createClient() options object, or the legacy
- * (port, [host, [options]]) signature, which is translated (including auth_pass to password).
- * @param {...*} args - A RedisClient instance, a createClient() options object, or legacy positional arguments.
+ * @param {Object|Object} [options] - A node-redis v6 RedisClient, or options for redis.createClient().
  */
-function PettyCache() {
+function PettyCache(options) {
     const intervals = {};
     let redisClient;
 
-    if (arguments[0] instanceof redis.RedisClient) {
-        redisClient = arguments[0];
-    } else if (isPort(arguments[0])) {
-        // Translate the legacy (port, [host, [options]]) signature to node-redis options
-        const options = translateLegacyOptions(arguments[2]);
+    if (options instanceof redis.RedisClient) {
+        redisClient = options;
+    } else {
+        if (arguments.length > 1 || typeof options === 'number' || typeof options === 'string') {
+            throw new TypeError('petty-cache v5 takes a node-redis options object. The (port, host, options) signature was removed; see docs/v4-to-v5.md.');
+        }
 
-        options.socket = Object.assign({}, options.socket, { port: Number(arguments[0]) });
+        const legacy = options ? LEGACY_OPTIONS.filter(key => Object.hasOwn(options, key)) : [];
 
-        if (arguments[1] !== undefined) {
-            options.socket.host = arguments[1];
+        if (legacy.length) {
+            throw new TypeError(`petty-cache v5 takes a node-redis options object. ${legacy.join(', ')} ${legacy.length === 1 ? 'is a node-redis v3 option' : 'are node-redis v3 options'} and would be ignored; see docs/v4-to-v5.md.`);
         }
 
         redisClient = redis.createClient(options);
-    } else if (arguments[0] && typeof arguments[0] === 'object') {
-        redisClient = redis.createClient(translateLegacyOptions(arguments[0]));
-    } else {
-        redisClient = redis.createClient(arguments[0]);
     }
 
     //eslint-disable-next-line no-console

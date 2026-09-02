@@ -36,31 +36,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.strictEqual(fromRedis.foo, 'bar');
         });
 
-        t.test('new PettyCache(port, host)', async () => {
-            const key = Math.random().toString();
-            const newPettyCache = new PettyCache(6379, 'localhost');
-
-            const data = await newPettyCache.fetch(key, async () => ({ foo: 'bar' }));
-
-            assert.equal(data.foo, 'bar');
-
-            const cached = await newPettyCache.fetch(key, () => {
-                throw 'This function should not be called';
-            });
-
-            assert.equal(cached.foo, 'bar');
-
-            // Wait for memory cache to expire
-            await timers.setTimeout(5001);
-
-            const fromRedis = await newPettyCache.fetch(key, () => {
-                throw 'This function should not be called';
-            });
-
-            assert.strictEqual(fromRedis.foo, 'bar');
-        });
-
-        t.test('new PettyCache(port, host, options) should translate legacy options', () => {
+        t.test('new PettyCache(options) should pass options straight to node-redis', () => {
             const originalCreateClient = redis.createClient;
             let capturedOptions;
 
@@ -69,95 +45,25 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 return originalCreateClient();
             };
 
-            const newPettyCache = new PettyCache(6379, 'localhost', { auth_pass: 'secret', connect_timeout: 500, db: 2, enable_offline_queue: false, family: 'IPv6', socket_initial_delay: 5000, socket_keepalive: false });
+            const newPettyCache = new PettyCache({ database: 2, password: 'secret', socket: { host: 'localhost', port: 6379 } });
 
             redis.createClient = originalCreateClient;
 
             assert(newPettyCache);
-            assert.strictEqual(capturedOptions.password, 'secret');
-            assert.strictEqual(capturedOptions.auth_pass, undefined);
-            assert.strictEqual(capturedOptions.database, 2);
-            assert.strictEqual(capturedOptions.db, undefined);
-            assert.strictEqual(capturedOptions.disableOfflineQueue, true);
-            assert.strictEqual(capturedOptions.enable_offline_queue, undefined);
-            assert.strictEqual(capturedOptions.socket.connectTimeout, 500);
-            assert.strictEqual(capturedOptions.socket.family, 6);
-            assert.strictEqual(capturedOptions.socket.keepAlive, false);
-            assert.strictEqual(capturedOptions.socket.keepAliveInitialDelay, 5000);
-            assert.strictEqual(capturedOptions.socket.host, 'localhost');
-            assert.strictEqual(capturedOptions.socket.port, 6379);
+            assert.deepStrictEqual(capturedOptions, { database: 2, password: 'secret', socket: { host: 'localhost', port: 6379 } });
         });
 
-        t.test('new PettyCache(port, host, options) should accept a numeric string port', () => {
-            const originalCreateClient = redis.createClient;
-            let capturedOptions;
-
-            redis.createClient = (options) => {
-                capturedOptions = options;
-                return originalCreateClient();
-            };
-
-            // process.env values are strings, which is how every caller passes the port
-            const newPettyCache = new PettyCache('6379', 'localhost', { auth_pass: 'secret', enable_offline_queue: false });
-
-            redis.createClient = originalCreateClient;
-
-            assert(newPettyCache);
-            assert.strictEqual(capturedOptions.password, 'secret');
-            assert.strictEqual(capturedOptions.disableOfflineQueue, true);
-            assert.strictEqual(capturedOptions.socket.host, 'localhost');
-            assert.strictEqual(capturedOptions.socket.port, 6379);
+        t.test('new PettyCache should throw for the v4 positional signature', () => {
+            assert.throws(() => new PettyCache(6379, 'localhost'), { constructor: TypeError, message: /node-redis options object/ });
+            assert.throws(() => new PettyCache('6379', 'localhost'), { constructor: TypeError, message: /node-redis options object/ });
+            assert.throws(() => new PettyCache(6379, 'localhost', { auth_pass: 'secret' }), { constructor: TypeError, message: /node-redis options object/ });
         });
 
-        t.test('new PettyCache(options) should translate legacy host, port, and tls options', () => {
-            const originalCreateClient = redis.createClient;
-            let capturedOptions;
-
-            redis.createClient = (options) => {
-                capturedOptions = options;
-                return originalCreateClient();
-            };
-
-            const newPettyCache = new PettyCache({ auth_pass: 'secret', family: 'IPv4', host: 'localhost', path: '/tmp/redis.sock', port: 6379, tls: { ca: 'certificate' } });
-
-            redis.createClient = originalCreateClient;
-
-            assert(newPettyCache);
-            assert.strictEqual(capturedOptions.password, 'secret');
-            assert.strictEqual(capturedOptions.host, undefined);
-            assert.strictEqual(capturedOptions.path, undefined);
-            assert.strictEqual(capturedOptions.port, undefined);
-            assert.strictEqual(capturedOptions.socket.family, 4);
-            assert.strictEqual(capturedOptions.socket.host, 'localhost');
-            assert.strictEqual(capturedOptions.socket.path, '/tmp/redis.sock');
-            assert.strictEqual(capturedOptions.socket.port, 6379);
-            assert.strictEqual(capturedOptions.socket.tls, true);
-            assert.strictEqual(capturedOptions.socket.ca, 'certificate');
-        });
-
-        t.test('new PettyCache(options) should pass through numeric family and boolean tls', () => {
-            const originalCreateClient = redis.createClient;
-            let capturedOptions;
-
-            redis.createClient = (options) => {
-                capturedOptions = options;
-                return originalCreateClient();
-            };
-
-            const newPettyCache = new PettyCache({ family: 4, tls: true });
-
-            redis.createClient = originalCreateClient;
-
-            assert(newPettyCache);
-            assert.strictEqual(capturedOptions.socket.family, 4);
-            assert.strictEqual(capturedOptions.socket.tls, true);
-        });
-
-        t.test('new PettyCache should throw for legacy options with no v6 equivalent', () => {
-            assert.throws(
-                () => new PettyCache(6379, 'localhost', { retry_strategy: () => 100 }),
-                { constructor: TypeError, message: /retry_strategy/ }
-            );
+        t.test('new PettyCache should throw for v3 option names', () => {
+            assert.throws(() => new PettyCache({ auth_pass: 'secret' }), { constructor: TypeError, message: /auth_pass/ });
+            assert.throws(() => new PettyCache({ host: 'localhost', port: 6379 }), { constructor: TypeError, message: /host/ });
+            assert.throws(() => new PettyCache({ enable_offline_queue: false }), { constructor: TypeError, message: /enable_offline_queue/ });
+            assert.throws(() => new PettyCache({ retry_strategy: () => 100 }), { constructor: TypeError, message: /retry_strategy/ });
         });
 
         t.test('new PettyCache(redisClient)', async () => {
