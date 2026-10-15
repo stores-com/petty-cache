@@ -9,7 +9,7 @@ A cache module for Node.js that uses a two-level cache (in-memory cache for rece
 
 Also includes mutex and semaphore distributed locking primitives.
 
-As of v5, every function returns a promise and callbacks are no longer supported — passing a callback rejects with a `TypeError`. Cache-miss functions must be async (or plain-return) functions. If you need callback support, use v4, which supports both styles and emits deprecation warnings for callback usage. See the [v4 to v5 migration guide](docs/v4-to-v5.md).
+Upgrading from v4? See the [v4 to v5 migration guide](docs/v4-to-v5.md).
 
 ## Features
 
@@ -47,8 +47,6 @@ const value = await pettyCache.fetch('key', async () => {
 ### new PettyCache([options])
 
 Creates a new petty-cache client backed by [node-redis](https://www.npmjs.com/package/redis) v6 and connects it automatically. `options` is passed to [redis.createClient()](https://www.npmjs.com/package/redis) untouched.
-
-v4's `(port, host, options)` signature and node-redis v3 option names are not supported; see the [v4 to v5 migration guide](docs/v4-to-v5.md).
 
 **Example**
 ```javascript

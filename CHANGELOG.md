@@ -11,7 +11,7 @@ See the [v4 to v5 migration guide](docs/v4-to-v5.md).
 ### Added
 - `pettyCache.close()` stops the background refresh intervals started by `fetchAndRefresh` and gracefully closes the Redis client connection.
 ### Changed
-- Callback support is removed. Every function returns a promise; passing a callback rejects with a `TypeError`.
+- Callback support is removed. Every function returns a promise.
 - Cache-miss functions and `retrieveOrCreate`'s `size` option must be async (or plain-return) functions; callback-style functions are no longer supported.
 - Upgraded the `redis` client from v3 to v6. The client is connected automatically, and injected clients must be node-redis v6 clients.
 - The constructor takes a node-redis v6 options object, passed to `redis.createClient()` untouched. The `(port, [host, [options]])` signature and node-redis v3 option names (`auth_pass`, `host`, `port`, `enable_offline_queue`, and friends) are no longer supported.

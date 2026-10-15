@@ -16,18 +16,6 @@ function acquireLock(key) {
 }
 
 /**
- * Throws if any of the given arguments is a function, catching legacy callback-style calls.
- * @param {string} name - The public method name shown in the error.
- * @param {...*} args - Arguments beyond the method's supported signature.
- */
-function assertNoCallback(name, ...args) {
-    if (args.some(arg => typeof arg === 'function')) {
-        throw new TypeError(`${name}: callbacks were removed in petty-cache v5. Use the returned promise instead.`);
-    }
-}
-
-
-/**
  * Returns a random integer between min and max, inclusive.
  * @param {number} min
  * @param {number} max
@@ -40,7 +28,6 @@ function random(min, max) {
 
     return Math.floor(Math.random() * (max - min + 1) + min);
 }
-
 
 /**
  * Creates a new PettyCache instance backed by Redis.
@@ -171,9 +158,7 @@ function PettyCache(options) {
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
      * @returns {Promise<Object>} Resolves with an object mapping each key to its cached value.
      */
-    this.bulkFetch = async (keys, func, options = {}, ...rest) => {
-        assertNoCallback('pettyCache.bulkFetch', options, ...rest);
-
+    this.bulkFetch = async (keys, func, options = {}) => {
         // If there aren't any keys, return
         if (!keys.length) {
             return {};
@@ -234,9 +219,7 @@ function PettyCache(options) {
      * @param {Array} keys - An array of cache keys.
      * @returns {Promise<Object>} Resolves with an object mapping each key to its value, or null if not found.
      */
-    this.bulkGet = async (keys, ...rest) => {
-        assertNoCallback('pettyCache.bulkGet', ...rest);
-
+    this.bulkGet = async (keys) => {
         // If there aren't any keys, return
         if (!keys.length) {
             return {};
@@ -289,9 +272,7 @@ function PettyCache(options) {
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
      * @returns {Promise}
      */
-    this.bulkSet = async (values, options = {}, ...rest) => {
-        assertNoCallback('pettyCache.bulkSet', options, ...rest);
-
+    this.bulkSet = async (values, options = {}) => {
         // Get TTL based on specified options
         const ttl = getTtl(options);
 
@@ -312,9 +293,7 @@ function PettyCache(options) {
      * closes the Redis client connection.
      * @returns {Promise}
      */
-    this.close = async (...rest) => {
-        assertNoCallback('pettyCache.close', ...rest);
-
+    this.close = async () => {
         Object.keys(intervals).forEach(key => {
             clearInterval(intervals[key]);
             delete intervals[key];
@@ -330,9 +309,7 @@ function PettyCache(options) {
      * @param {string} key - The cache key to delete.
      * @returns {Promise}
      */
-    this.del = async (key, ...rest) => {
-        assertNoCallback('pettyCache.del', ...rest);
-
+    this.del = async (key) => {
         await redisClient.del(key);
         memoryCache.del(key);
     };
@@ -346,9 +323,7 @@ function PettyCache(options) {
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
      * @returns {Promise<*>} Resolves with the cached or newly fetched value.
      */
-    this.fetch = async (key, func, options = {}, ...rest) => {
-        assertNoCallback('pettyCache.fetch', options, ...rest);
-
+    this.fetch = async (key, func, options = {}) => {
         // Try to get value from memory cache
         let result = getFromMemoryCache(key);
 
@@ -422,9 +397,7 @@ function PettyCache(options) {
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
      * @returns {Promise<*>} Resolves with the cached or newly fetched value.
      */
-    this.fetchAndRefresh = async (key, func, options = {}, ...rest) => {
-        assertNoCallback('pettyCache.fetchAndRefresh', options, ...rest);
-
+    this.fetchAndRefresh = async (key, func, options = {}) => {
         // Get TTL based on specified options
         const ttl = getTtl(options);
 
@@ -458,9 +431,7 @@ function PettyCache(options) {
      * @param {string} key - The cache key.
      * @returns {Promise<*>} Resolves with the cached value, or null if not found.
      */
-    this.get = async (key, ...rest) => {
-        assertNoCallback('pettyCache.get', ...rest);
-
+    this.get = async (key) => {
         // Try to get value from memory cache
         let result = getFromMemoryCache(key);
 
@@ -509,9 +480,7 @@ function PettyCache(options) {
          * @param {number} [options.retry.interval=100] - Delay between retries in ms.
          * @returns {Promise}
          */
-        lock: async (key, options = {}, ...rest) => {
-            assertNoCallback('pettyCache.mutex.lock', options, ...rest);
-
+        lock: async (key, options = {}) => {
             options.retry = Object.hasOwn(options, 'retry') ? options.retry : {};
             options.retry.interval = Object.hasOwn(options.retry, 'interval') ? options.retry.interval : 100;
             options.retry.times = Object.hasOwn(options.retry, 'times') ? options.retry.times : 1;
@@ -547,9 +516,7 @@ function PettyCache(options) {
          * @param {string} key - The lock key to release.
          * @returns {Promise}
          */
-        unlock: async (key, ...rest) => {
-            assertNoCallback('pettyCache.mutex.unlock', ...rest);
-
+        unlock: async (key) => {
             await redisClient.del(key);
         }
     };
@@ -562,9 +529,7 @@ function PettyCache(options) {
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
      * @returns {Promise}
      */
-    this.patch = async (key, value, options = {}, ...rest) => {
-        assertNoCallback('pettyCache.patch', options, ...rest);
-
+    this.patch = async (key, value, options = {}) => {
         const data = await this.get(key);
 
         if (!data) {
@@ -589,9 +554,7 @@ function PettyCache(options) {
          * @param {number} [options.retry.interval=100] - Delay between retries in ms.
          * @returns {Promise<number>} Resolves with the acquired slot index.
          */
-        acquireLock: async (key, options = {}, ...rest) => {
-            assertNoCallback('pettyCache.semaphore.acquireLock', options, ...rest);
-
+        acquireLock: async (key, options = {}) => {
             options.retry = Object.hasOwn(options, 'retry') ? options.retry : {};
             options.retry.interval = Object.hasOwn(options.retry, 'interval') ? options.retry.interval : 100;
             options.retry.times = Object.hasOwn(options.retry, 'times') ? options.retry.times : 1;
@@ -654,9 +617,7 @@ function PettyCache(options) {
          * @param {number} index - The slot index to consume.
          * @returns {Promise}
          */
-        consumeLock: async (key, index, ...rest) => {
-            assertNoCallback('pettyCache.semaphore.consumeLock', ...rest);
-
+        consumeLock: async (key, index) => {
             // Mutex lock around semaphore
             await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
@@ -694,9 +655,7 @@ function PettyCache(options) {
          * @param {number} size - The desired pool size (must be >= current size).
          * @returns {Promise}
          */
-        expand: async (key, size, ...rest) => {
-            assertNoCallback('pettyCache.semaphore.expand', ...rest);
-
+        expand: async (key, size) => {
             // Mutex lock around semaphore
             await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
@@ -732,9 +691,7 @@ function PettyCache(options) {
          * @param {number} index - The slot index to release.
          * @returns {Promise}
          */
-        releaseLock: async (key, index, ...rest) => {
-            assertNoCallback('pettyCache.semaphore.releaseLock', ...rest);
-
+        releaseLock: async (key, index) => {
             // Mutex lock around semaphore
             await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
@@ -766,9 +723,7 @@ function PettyCache(options) {
          * @param {string} key - The semaphore key.
          * @returns {Promise<Array>} Resolves with the reset pool.
          */
-        reset: async (key, ...rest) => {
-            assertNoCallback('pettyCache.semaphore.reset', ...rest);
-
+        reset: async (key) => {
             // Mutex lock around semaphore
             await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
@@ -799,9 +754,7 @@ function PettyCache(options) {
          * @param {number|Function} [options.size=1] - Pool size, or an async function that resolves the size.
          * @returns {Promise<Array>} Resolves with the semaphore pool.
          */
-        retrieveOrCreate: async (key, options = {}, ...rest) => {
-            assertNoCallback('pettyCache.semaphore.retrieveOrCreate', options, ...rest);
-
+        retrieveOrCreate: async (key, options = {}) => {
             // Mutex lock around semaphore retrival or creation
             await this.mutex.lock(`lock:${key}`, { retry: { times: 100 } });
 
@@ -842,9 +795,7 @@ function PettyCache(options) {
      * @param {number|Object} [options.ttl] - TTL in ms, or object with min/max properties.
      * @returns {Promise}
      */
-    this.set = async (key, value, options = {}, ...rest) => {
-        assertNoCallback('pettyCache.set', options, ...rest);
-
+    this.set = async (key, value, options = {}) => {
         // Get TTL based on specified options
         const ttl = getTtl(options);
 

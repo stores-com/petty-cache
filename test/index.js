@@ -53,7 +53,6 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.deepStrictEqual(capturedOptions, { database: 2, password: 'secret', socket: { host: 'localhost', port: 6379 } });
         });
 
-
         t.test('new PettyCache(redisClient)', async () => {
             const key = Math.random().toString();
             const redisClient = redis.createClient();
@@ -274,56 +273,14 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.strictEqual(fromRedis[key2], null);
         });
 
-        t.test('PettyCache.bulkFetch should return values (promises)', async () => {
-            const key1 = Math.random().toString();
-            const key2 = Math.random().toString();
-
-            await pettyCache.set(key1, '1');
-
-            const values = await pettyCache.bulkFetch([key1, key2], async () => {
-                const data = {};
-                data[key2] = '2';
-                return data;
-            });
-
-            assert.strictEqual(values[key1], '1');
-            assert.strictEqual(values[key2], '2');
-        });
-
-        t.test('PettyCache.bulkFetch should return empty object when no keys are passed (promises)', async () => {
+        t.test('PettyCache.bulkFetch should return empty object when no keys are passed', async () => {
             const values = await pettyCache.bulkFetch([], () => {
                 throw new Error('This function should not be called');
             });
             assert.deepEqual(values, {});
         });
 
-        t.test('PettyCache.bulkFetch should return values with options (promises)', async () => {
-            const key = Math.random().toString();
-            const values = await pettyCache.bulkFetch([key], async (keys) => {
-                const result = {};
-                keys.forEach(k => { result[k] = 'value'; });
-                return result;
-            }, { ttl: 6000 });
-            assert.deepEqual(values, { [key]: 'value' });
-        });
-
-        t.test('PettyCache.bulkFetch should support async func (promises)', async () => {
-            const key1 = Math.random().toString();
-            const key2 = Math.random().toString();
-
-            await pettyCache.set(key1, '1');
-
-            const values = await pettyCache.bulkFetch([key1, key2], async (keys) => {
-                const result = {};
-                keys.forEach(k => { result[k] = 'value'; });
-                return result;
-            });
-
-            assert.strictEqual(values[key1], '1');
-            assert.strictEqual(values[key2], 'value');
-        });
-
-        t.test('PettyCache.bulkFetch should reject if async func throws error (promises)', async () => {
+        t.test('PettyCache.bulkFetch should reject if async func throws error', async () => {
             await assert.rejects(
                 pettyCache.bulkFetch([Math.random().toString()], async () => {
                     throw new Error('PettyCache.bulkFetch should reject if async func throws error');
@@ -517,30 +474,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.strictEqual(expired[key7], null);
         });
 
-        t.test('PettyCache.bulkGet should return values (promises)', async () => {
-            const key1 = Math.random().toString();
-            const key2 = Math.random().toString();
-
-            await pettyCache.set(key1, '1');
-            await pettyCache.set(key2, '2');
-
-            const values = await pettyCache.bulkGet([key1, key2]);
-            assert.strictEqual(values[key1], '1');
-            assert.strictEqual(values[key2], '2');
-        });
-
-        t.test('PettyCache.bulkGet should return null for missing keys (promises)', async () => {
-            const key1 = Math.random().toString();
-            const key2 = Math.random().toString();
-
-            await pettyCache.set(key1, '1');
-
-            const values = await pettyCache.bulkGet([key1, key2]);
-            assert.strictEqual(values[key1], '1');
-            assert.strictEqual(values[key2], null);
-        });
-
-        t.test('PettyCache.bulkGet should return empty object when no keys are passed (promises)', async () => {
+        t.test('PettyCache.bulkGet should return empty object when no keys are passed', async () => {
             const values = await pettyCache.bulkGet([]);
             assert.deepEqual(values, {});
         });
@@ -648,31 +582,6 @@ test('petty-cache', { concurrency: true }, async (t) => {
 
             assert.strictEqual(await pettyCache.get(key1), '1');
         });
-
-        t.test('PettyCache.bulkSet should set values (promises)', async () => {
-            const key1 = Math.random().toString();
-            const key2 = Math.random().toString();
-            const values = {};
-
-            values[key1] = '1';
-            values[key2] = 2;
-
-            await pettyCache.bulkSet(values);
-
-            assert.strictEqual(await pettyCache.get(key1), '1');
-            assert.strictEqual(await pettyCache.get(key2), 2);
-        });
-
-        t.test('PettyCache.bulkSet should set values with options (promises)', async () => {
-            const key1 = Math.random().toString();
-            const values = {};
-
-            values[key1] = 'hello';
-
-            await pettyCache.bulkSet(values, { ttl: 10000 });
-
-            assert.strictEqual(await pettyCache.get(key1), 'hello');
-        });
     });
 
     t.test('PettyCache.del', { concurrency: true }, async (t) => {
@@ -689,16 +598,6 @@ test('petty-cache', { concurrency: true }, async (t) => {
 
             // Deleting a key that no longer exists should not error
             await pettyCache.del(key);
-        });
-
-        t.test('PettyCache.del (promises)', async () => {
-            const key = Math.random().toString();
-
-            await pettyCache.set(key, 'value');
-            assert.strictEqual(await pettyCache.get(key), 'value');
-
-            await pettyCache.del(key);
-            assert.strictEqual(await pettyCache.get(key), null);
         });
     });
 
@@ -811,7 +710,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.equal(cached, 2);
         });
 
-        t.test('PettyCache.fetch should support sync func without callback', async () => {
+        t.test('PettyCache.fetch should support a sync func', async () => {
             const key = Math.random().toString();
 
             const data = await pettyCache.fetch(key, () => {
@@ -836,45 +735,13 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.strictEqual(fromRedis.foo, 'bar');
         });
 
-        t.test('PettyCache.fetch should return value (promises)', async () => {
-            const key = Math.random().toString();
-
-            const data = await pettyCache.fetch(key, async () => ({ foo: 'bar' }));
-
-            assert.strictEqual(data.foo, 'bar');
-
-            const cached = await pettyCache.fetch(key, () => {
-                throw 'This function should not be called';
-            });
-
-            assert.strictEqual(cached.foo, 'bar');
-        });
-
-        t.test('PettyCache.fetch should support async func (promises)', async () => {
-            const key = Math.random().toString();
-
-            const data = await pettyCache.fetch(key, async () => {
-                return { foo: 'bar' };
-            });
-
-            assert.strictEqual(data.foo, 'bar');
-        });
-
-        t.test('PettyCache.fetch should reject if async func throws error (promises)', async () => {
+        t.test('PettyCache.fetch should reject if async func throws error', async () => {
             await assert.rejects(
                 pettyCache.fetch(Math.random().toString(), async () => {
                     throw new Error('PettyCache.fetch should reject if async func throws error');
                 }),
                 { message: 'PettyCache.fetch should reject if async func throws error' }
             );
-        });
-
-        t.test('PettyCache.fetch should return value with options (promises)', async () => {
-            const key = Math.random().toString();
-
-            const data = await pettyCache.fetch(key, async () => 'value', { ttl: 6000 });
-
-            assert.strictEqual(data, 'value');
         });
     });
 
@@ -978,30 +845,6 @@ test('petty-cache', { concurrency: true }, async (t) => {
                 { message: 'PettyCache.fetchAndRefresh should reject if func throws error' }
             );
         });
-
-        t.test('PettyCache.fetchAndRefresh should not require options', async () => {
-            const data = await pettyCache.fetchAndRefresh(Math.random().toString(), async () => ({ foo: 'bar' }));
-
-            assert.equal(data.foo, 'bar');
-        });
-
-        t.test('PettyCache.fetchAndRefresh should support async func and refresh it (promises)', async () => {
-            const key = Math.random().toString();
-            let numberOfFuncCalls = 0;
-
-            const func = async () => ++numberOfFuncCalls;
-
-            const data = await pettyCache.fetchAndRefresh(key, func, { ttl: 6000 });
-
-            assert.strictEqual(data, 1);
-
-            // Wait for the background refresh interval (ttl.min / 2)
-            await timers.setTimeout(3500);
-
-            assert.ok(numberOfFuncCalls >= 2, `func should have been called by the refresh interval (calls: ${numberOfFuncCalls})`);
-            assert.ok(await pettyCache.get(key) >= 2, 'the refreshed value should have been stored in cache');
-        });
-
     });
 
     t.test('PettyCache.get', { concurrency: true }, async (t) => {
@@ -1023,25 +866,6 @@ test('petty-cache', { concurrency: true }, async (t) => {
 
             assert.strictEqual(await pettyCache.get(key), null);
             assert.strictEqual(await pettyCache.get(key), null);
-        });
-
-        t.test('PettyCache.get should return value (promises)', async () => {
-            const key = Math.random().toString();
-
-            await pettyCache.set(key, 'hello world');
-            const value = await pettyCache.get(key);
-            assert.equal(value, 'hello world');
-
-            // Wait for memory cache to expire
-            await new Promise(resolve => setTimeout(resolve, 5001));
-            const value2 = await pettyCache.get(key);
-            assert.equal(value2, 'hello world');
-        });
-
-        t.test('PettyCache.get should return null for missing keys (promises)', async () => {
-            const key = Math.random().toString();
-            const value = await pettyCache.get(key);
-            assert.strictEqual(value, null);
         });
     });
 
@@ -1131,7 +955,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
     });
 
     t.test('PettyCache.patch', { concurrency: true }, async (t) => {
-        t.test('PettyCache.patch should update the values of given object keys (promises)', async () => {
+        t.test('PettyCache.patch should update the values of given object keys', async () => {
             const key = Math.random().toString();
 
             await pettyCache.set(key, { a: 1, b: 2, c: 3 });
@@ -1140,11 +964,11 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.deepEqual(data, { a: 1, b: 4, c: 5 });
         });
 
-        t.test('PettyCache.patch should reject if the key does not exist (promises)', async () => {
+        t.test('PettyCache.patch should reject if the key does not exist', async () => {
             await assert.rejects(() => pettyCache.patch(Math.random().toString(), { b: 3 }), { message: /does not exist/ });
         });
 
-        t.test('PettyCache.patch should update the values of given object keys with options (promises)', async () => {
+        t.test('PettyCache.patch should update the values of given object keys with options', async () => {
             const key = Math.random().toString();
 
             await pettyCache.set(key, { a: 1, b: 2, c: 3 });
@@ -1433,7 +1257,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
             });
         });
 
-        t.test('PettyCache.semaphore should support promises for the full lock lifecycle (promises)', async () => {
+        t.test('PettyCache.semaphore.reset should resolve with the reset pool, keeping expansions', async () => {
             const key = Math.random().toString();
 
             const semaphore = await pettyCache.semaphore.retrieveOrCreate(key, { size: 2 });
@@ -1455,7 +1279,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.ok(pool.every(s => s.status === 'available'));
         });
 
-        t.test('PettyCache.semaphore.retrieveOrCreate should allow options.size to provide an async function (promises)', async () => {
+        t.test('PettyCache.semaphore.retrieveOrCreate should allow options.size to be an async function', async () => {
             const key = Math.random().toString();
 
             const semaphore = await pettyCache.semaphore.retrieveOrCreate(key, { size: async () => 3 });
@@ -1463,14 +1287,7 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.strictEqual(semaphore.length, 3);
         });
 
-        t.test('PettyCache.semaphore.acquireLock should reject if the semaphore does not exist (promises)', async () => {
-            await assert.rejects(
-                pettyCache.semaphore.acquireLock(Math.random().toString()),
-                { message: /doesn't exist/ }
-            );
-        });
-
-        t.test('PettyCache.semaphore.acquireLock should retry until a slot becomes available (promises)', async () => {
+        t.test('PettyCache.semaphore.acquireLock should retry until a slot becomes available', async () => {
             const key = Math.random().toString();
 
             await pettyCache.semaphore.retrieveOrCreate(key, { size: 1 });
@@ -1484,17 +1301,6 @@ test('petty-cache', { concurrency: true }, async (t) => {
             const retriedIndex = await pettyCache.semaphore.acquireLock(key, { retry: { interval: 200, times: 10 } });
 
             assert.strictEqual(retriedIndex, 0);
-        });
-
-        t.test('PettyCache.semaphore.expand should reject when shrinking (promises)', async () => {
-            const key = Math.random().toString();
-
-            await pettyCache.semaphore.retrieveOrCreate(key, { size: 2 });
-
-            await assert.rejects(
-                pettyCache.semaphore.expand(key, 1),
-                { message: /Cannot shrink pool/ }
-            );
         });
     });
 
@@ -1669,34 +1475,6 @@ test('petty-cache', { concurrency: true }, async (t) => {
             await timers.setTimeout(5001);
 
             assert.strictEqual(await pettyCache.get(key), null);
-        });
-
-        t.test('PettyCache.set should set a value (promises)', async () => {
-            const key = Math.random().toString();
-
-            await pettyCache.set(key, 'hello world');
-            const value = await pettyCache.get(key);
-            assert.equal(value, 'hello world');
-
-            // Wait for memory cache to expire
-            await new Promise(resolve => setTimeout(resolve, 5001));
-            const value2 = await pettyCache.get(key);
-            assert.equal(value2, 'hello world');
-        });
-
-        t.test('PettyCache.set should set a value with options (promises)', async () => {
-            const key = Math.random().toString();
-
-            await pettyCache.set(key, 'hello world', { ttl: 6000 });
-            const value = await pettyCache.get(key);
-            assert.equal(value, 'hello world');
-        });
-
-        t.test('PettyCache.set should return a promise when no callback is provided', async () => {
-            const key = Math.random().toString();
-            const result = pettyCache.set(key, 'hello world');
-            assert(result instanceof Promise);
-            await result;
         });
     });
 
@@ -2536,30 +2314,6 @@ test('PettyCache.fetch should lock around Redis', async () => {
     const callsAfter = parseInt(tokenAfter.split('=')[1]);
 
     assert.strictEqual(callsBefore + 2, callsAfter);
-});
-
-test('PettyCache should reject callback-style usage with a TypeError', async () => {
-    const noop = () => {};
-
-    await assert.rejects(pettyCache.bulkFetch(['k'], async () => ({}), noop), TypeError);
-    await assert.rejects(pettyCache.bulkFetch(['k'], async () => ({}), {}, noop), TypeError);
-    await assert.rejects(pettyCache.bulkGet(['k'], noop), TypeError);
-    await assert.rejects(pettyCache.bulkSet({ k: 1 }, noop), TypeError);
-    await assert.rejects(pettyCache.close(noop), TypeError);
-    await assert.rejects(pettyCache.del('k', noop), TypeError);
-    await assert.rejects(pettyCache.fetch('k', async () => 'v', noop), TypeError);
-    await assert.rejects(pettyCache.fetchAndRefresh('k', async () => 'v', noop), TypeError);
-    await assert.rejects(pettyCache.get('k', noop), TypeError);
-    await assert.rejects(pettyCache.mutex.lock('k', noop), TypeError);
-    await assert.rejects(pettyCache.mutex.unlock('k', noop), TypeError);
-    await assert.rejects(pettyCache.patch('k', { a: 1 }, noop), TypeError);
-    await assert.rejects(pettyCache.semaphore.acquireLock('k', noop), TypeError);
-    await assert.rejects(pettyCache.semaphore.consumeLock('k', 0, noop), TypeError);
-    await assert.rejects(pettyCache.semaphore.expand('k', 2, noop), TypeError);
-    await assert.rejects(pettyCache.semaphore.releaseLock('k', 0, noop), TypeError);
-    await assert.rejects(pettyCache.semaphore.reset('k', noop), TypeError);
-    await assert.rejects(pettyCache.semaphore.retrieveOrCreate('k', noop), TypeError);
-    await assert.rejects(pettyCache.set('k', 'v', noop), TypeError);
 });
 
 test('PettyCache.close should stop refresh intervals and close the client', async () => {

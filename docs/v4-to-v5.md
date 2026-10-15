@@ -1,6 +1,6 @@
 # Migrating from v4 to v5
 
-v5 removes callback support entirely and upgrades the underlying Redis client from node-redis v3 to v6. v4 supports both callbacks and promises and emits a `DeprecationWarning` for every callback-style usage — migrate to v4 first, clear the warnings, and the jump to v5 is a version bump.
+v5 removes callback support entirely and upgrades the underlying Redis client from node-redis v3 to v6. v4 supports both callbacks and promises and emits a `DeprecationWarning` for callback-style usage — migrate to v4 first and clear the warnings, then rewrite the constructor call (see [Redis client v3 → v6](#redis-client-v3--v6)).
 
 ## Finding callback usage
 
@@ -10,11 +10,7 @@ On v4, each callback-style call emits a once-per-process `DeprecationWarning` na
 node --trace-deprecation index.js
 ```
 
-On v5, any remaining callback usage rejects with a `TypeError` instead of silently doing nothing:
-
-```
-TypeError: pettyCache.get: callbacks were removed in petty-cache v5. Use the returned promise instead.
-```
+On v5, a leftover callback is never called: the result or error goes only to the returned promise.
 
 ## Method callbacks → promises
 
@@ -50,12 +46,12 @@ try {
 
 ## Fire-and-forget calls
 
-Calls that previously omitted the callback to ignore the result now return a promise. An ignored rejected promise crashes modern Node.js processes, so handle it explicitly:
+Calls that passed a callback only to ignore the result or error now need to handle the returned promise. An ignored rejected promise crashes modern Node.js processes:
 
 **Before**
 
 ```javascript
-pettyCache.semaphore.reset(key);
+pettyCache.semaphore.reset(key, () => {});
 ```
 
 **After**
