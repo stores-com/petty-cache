@@ -53,11 +53,6 @@ function PettyCache(options) {
     if (options instanceof redis.RedisClient) {
         redisClient = options;
     } else {
-        // node-redis v6 silently ignores v4's (port, host, options) arguments and connects to localhost:6379
-        if (arguments.length > 1 || typeof options === 'number' || typeof options === 'string') {
-            throw new TypeError('petty-cache takes a node-redis options object');
-        }
-
         redisClient = redis.createClient(options);
     }
 

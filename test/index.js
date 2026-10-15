@@ -53,13 +53,6 @@ test('petty-cache', { concurrency: true }, async (t) => {
             assert.deepStrictEqual(capturedOptions, { database: 2, password: 'secret', socket: { host: 'localhost', port: 6379 } });
         });
 
-        t.test('new PettyCache should throw for the v4 positional signature', () => {
-            assert.throws(() => new PettyCache(6379), { constructor: TypeError, message: /node-redis options object/ });
-            assert.throws(() => new PettyCache('6379', 'localhost'), { constructor: TypeError, message: /node-redis options object/ });
-            assert.throws(() => new PettyCache(6379, 'localhost', { auth_pass: 'secret' }), { constructor: TypeError, message: /node-redis options object/ });
-            assert.throws(() => new PettyCache(undefined, undefined, { auth_pass: 'secret' }), { constructor: TypeError, message: /node-redis options object/ });
-        });
-
 
         t.test('new PettyCache(redisClient)', async () => {
             const key = Math.random().toString();
