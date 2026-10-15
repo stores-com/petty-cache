@@ -104,7 +104,7 @@ Plain-return functions (`() => value`) also work anywhere an async function is a
 
 petty-cache now uses [node-redis](https://www.npmjs.com/package/redis) v6 and connects the client automatically.
 
-**The constructor takes a node-redis v6 options object.** v4's `(port, host, options)` signature and its node-redis v3 option names are both gone.
+**The constructor takes a node-redis v6 options object.** v4's `(port, host, options)` signature and its node-redis v3 option names are both gone. The old signature throws `TypeError: petty-cache takes a node-redis options object`, because node-redis v6 would silently ignore those arguments and connect to localhost:6379 instead.
 
 **Before**
 
