@@ -310,14 +310,19 @@ const text = PettyCache.stringify({ a: null }); // '{"a":"__null"}'
 
 ### pettyCache.mutex.lock(key, [options])
 
-Attempts to acquire a distributed lock for the specified key. Optionally retries a specified number of times by waiting a specified amount of time between attempts.
+Attempts to acquire a distributed lock for the specified key. Optionally retries a specified number of times by waiting a specified amount of time between attempts. Rejects if the lock is still held after the last attempt.
+
+Resolves with a lock handle. Declare it with `await using` (Node.js 24 or later) and the lock is released when the block exits, including when the block throws:
 
 ```javascript
-await pettyCache.mutex.lock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 });
+async function doWork() {
+    await using lock = await pettyCache.mutex.lock('key', { retry: { interval: 100, times: 5 }, ttl: 1000 });
 
-// We were able to acquire the lock. Do work and then unlock.
-await pettyCache.mutex.unlock('key');
+    // We were able to acquire the lock. Do work; the lock is released when doWork returns or throws.
+}
 ```
+
+The handle only releases its own lock. If the TTL expired and another caller acquired the lock, disposing the handle leaves the newer lock in place. Without `await using`, release the lock with `await lock[Symbol.asyncDispose]()`.
 
 **Options**
 
@@ -333,7 +338,7 @@ await pettyCache.mutex.unlock('key');
 
 ### pettyCache.mutex.unlock(key)
 
-Releases the distributed lock for the specified key.
+Releases the distributed lock for the specified key, whoever holds it.
 
 ```javascript
 await pettyCache.mutex.unlock('key');
