@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.1] - 2026-10-26
+### Fixed
+- Disposing a `pettyCache.mutex.lock()` handle no longer rejects when Redis fails. The error is ignored and the lock expires via its TTL, as with the semaphore functions. Before, an `await using` block threw after its work succeeded, or wrapped its own error in a `SuppressedError`.
+
 ## [5.1.0] - 2026-10-26
 ### Added
 - `pettyCache.mutex.lock()` resolves with a lock handle. Declare it with `await using` to release the lock when the block exits, even when it throws. The handle only releases its own lock: if the TTL expired and another caller acquired the lock, disposing the handle leaves the newer lock in place.

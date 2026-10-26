@@ -1834,7 +1834,7 @@ test('PettyCache.mutex.unlock should return error if Redis DEL fails', async () 
     stubClient.del = originalDel;
 });
 
-test('PettyCache.mutex.lock handle should return error if Redis EVAL fails', async () => {
+test('PettyCache.mutex.lock handle should ignore Redis EVAL errors', async () => {
     const stubClient = redis.createClient();
     const originalEval = stubClient.eval.bind(stubClient);
 
@@ -1843,10 +1843,14 @@ test('PettyCache.mutex.lock handle should return error if Redis EVAL fails', asy
     const pettyCache = new PettyCache(stubClient);
     const lock = await pettyCache.mutex.lock(Math.random().toString());
 
-    await assert.rejects(
-        lock[Symbol.asyncDispose](),
-        { message: 'Redis EVAL error' }
-    );
+    await assert.doesNotReject(lock[Symbol.asyncDispose]());
+
+    // The await using block's own error comes through, not wrapped in a SuppressedError
+    await assert.rejects(async () => {
+        await using lock = await pettyCache.mutex.lock(Math.random().toString());
+
+        throw new Error('Work failed');
+    }, { message: 'Work failed', name: 'Error' });
 
     stubClient.eval = originalEval;
 });

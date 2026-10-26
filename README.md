@@ -322,7 +322,7 @@ async function doWork() {
 }
 ```
 
-The handle only releases its own lock. If the TTL expired and another caller acquired the lock, disposing the handle leaves the newer lock in place. Without `await using`, release the lock with `await lock[Symbol.asyncDispose]()`.
+The handle only releases its own lock. If the TTL expired and another caller acquired the lock, disposing the handle leaves the newer lock in place. Releasing never rejects: if Redis fails, the error is ignored and the lock expires via its TTL. Without `await using`, release the lock with `await lock[Symbol.asyncDispose]()`.
 
 **Options**
 
