@@ -503,8 +503,9 @@ function PettyCache(options) {
 
                 return {
                     [Symbol.asyncDispose]: async () => {
-                        // Compare-and-delete, so a holder whose TTL expired can't release a newer holder's lock
-                        await redisClient.eval('if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0', { arguments: [value], keys: [key] });
+                        // Compare-and-delete, so a holder whose TTL expired can't release a newer holder's lock.
+                        // Release errors are ignored; the mutex lock expires via its TTL
+                        await redisClient.eval('if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0', { arguments: [value], keys: [key] }).catch(() => {});
                     }
                 };
             };
