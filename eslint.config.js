@@ -16,7 +16,7 @@ module.exports = [
             'no-console': 'error',
             'no-inline-comments': 'warn',
             'no-trailing-spaces': 'error',
-            'no-unused-vars': ['error', { caughtErrors: 'none' }],
+            'no-unused-vars': ['error', { caughtErrors: 'none', ignoreUsingDeclarations: true }],
             'object-curly-spacing': ['error', 'always'],
             quotes: ['error', 'single'],
             semi: ['error', 'always'],

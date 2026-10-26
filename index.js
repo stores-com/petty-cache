@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const timers = require('node:timers/promises');
 
 const lock = require('lock').Lock();
@@ -478,7 +479,7 @@ function PettyCache(options) {
          * @param {Object} [options.retry] - Retry options.
          * @param {number} [options.retry.times=1] - Number of acquisition attempts.
          * @param {number} [options.retry.interval=100] - Delay between retries in ms.
-         * @returns {Promise}
+         * @returns {Promise<AsyncDisposable>} Resolves with a lock handle; disposing it (`await using`) releases the lock if this caller still holds it.
          */
         lock: async (key, options = {}) => {
             options.retry = Object.hasOwn(options, 'retry') ? options.retry : {};
@@ -486,8 +487,11 @@ function PettyCache(options) {
             options.retry.times = Object.hasOwn(options.retry, 'times') ? options.retry.times : 1;
             options.ttl = Object.hasOwn(options, 'ttl') ? options.ttl : 1000;
 
+            // Identifies this holder so its handle only releases its own lock
+            const value = crypto.randomUUID();
+
             const attempt = async () => {
-                const res = await redisClient.set(key, '1', { NX: true, PX: options.ttl });
+                const res = await redisClient.set(key, value, { NX: true, PX: options.ttl });
 
                 if (!res) {
                     throw new Error();
@@ -496,6 +500,13 @@ function PettyCache(options) {
                 if (res !== 'OK') {
                     throw new Error(res);
                 }
+
+                return {
+                    [Symbol.asyncDispose]: async () => {
+                        // Compare-and-delete, so a holder whose TTL expired can't release a newer holder's lock
+                        await redisClient.eval('if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0', { arguments: [value], keys: [key] });
+                    }
+                };
             };
 
             let attempts = options.retry.times;
@@ -512,7 +523,7 @@ function PettyCache(options) {
             return attempt();
         },
         /**
-         * Releases a distributed mutex lock in Redis.
+         * Releases a distributed mutex lock in Redis, whoever holds it.
          * @param {string} key - The lock key to release.
          * @returns {Promise}
          */

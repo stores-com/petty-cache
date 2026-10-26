@@ -932,6 +932,46 @@ test('petty-cache', { concurrency: true }, async (t) => {
 
                 await pettyCache.mutex.lock(key, { retry: { interval: 500, times: 10 } });
             });
+
+            t.test('PettyCache.mutex.lock should release the lock when an await using block throws', async () => {
+                const key = Math.random().toString();
+
+                await assert.rejects(async () => {
+                    await using lock = await pettyCache.mutex.lock(key, { ttl: 10000 });
+
+                    throw new Error('Work failed');
+                }, { message: 'Work failed' });
+
+                await pettyCache.mutex.lock(key);
+            });
+
+            t.test('PettyCache.mutex.lock should acquire a lock after the previous handle is disposed', async () => {
+                const key = Math.random().toString();
+
+                {
+                    await using lock = await pettyCache.mutex.lock(key, { ttl: 10000 });
+
+                    await assert.rejects(pettyCache.mutex.lock(key));
+                }
+
+                await pettyCache.mutex.lock(key);
+            });
+
+            t.test('PettyCache.mutex.lock handle should not release a newer holder\'s lock after its own lock expired', async () => {
+                const key = Math.random().toString();
+
+                const expiredLock = await pettyCache.mutex.lock(key, { ttl: 100 });
+
+                // Wait for the lock to expire, then let a newer holder acquire it
+                await timers.setTimeout(200);
+
+                await pettyCache.mutex.lock(key, { ttl: 10000 });
+
+                await expiredLock[Symbol.asyncDispose]();
+
+                // The newer holder still has the lock
+                await assert.rejects(pettyCache.mutex.lock(key));
+            });
         });
 
         t.test('PettyCache.mutex.unlock', { concurrency: true }, async (t) => {
@@ -1792,6 +1832,23 @@ test('PettyCache.mutex.unlock should return error if Redis DEL fails', async () 
     );
 
     stubClient.del = originalDel;
+});
+
+test('PettyCache.mutex.lock handle should return error if Redis EVAL fails', async () => {
+    const stubClient = redis.createClient();
+    const originalEval = stubClient.eval.bind(stubClient);
+
+    stubClient.eval = () => Promise.reject(new Error('Redis EVAL error'));
+
+    const pettyCache = new PettyCache(stubClient);
+    const lock = await pettyCache.mutex.lock(Math.random().toString());
+
+    await assert.rejects(
+        lock[Symbol.asyncDispose](),
+        { message: 'Redis EVAL error' }
+    );
+
+    stubClient.eval = originalEval;
 });
 
 test('PettyCache.patch should return error if Redis GET fails', async () => {
