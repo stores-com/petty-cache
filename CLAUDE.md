@@ -66,7 +66,7 @@ npm install
 
 ## CI/CD
 GitHub Actions workflow (`.github/workflows/test.yml`) runs on push and pull requests:
-1. Sets up Node.js 22.17.0
+1. Sets up Node.js 26
 2. Installs dependencies
 3. Runs ESLint
 4. Sets up Redis 6.0.14
